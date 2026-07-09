@@ -20,7 +20,7 @@
 }
 *{box-sizing:border-box;}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased;}
-#app{max-width:1040px;margin:0 auto;padding:28px 20px 60px;}
+#app{max-width:1280px;margin:0 auto;padding:28px 32px 60px;}
 
 .header{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
 .header .grow{flex:1;}
@@ -133,9 +133,19 @@ footer button:hover{opacity:1;}
 .toast.ok{border-color:var(--green);color:var(--green);}
 
 /* public / login */
-.center-wrap{max-width:440px;margin:6vh auto 0;}
-.public-note{font-size:12.5px;color:var(--text-muted);margin-top:10px;text-align:center;}
+.center-wrap{max-width:960px;margin:4vh auto 0;}
+.public-layout{display:grid;grid-template-columns:1fr 380px;gap:28px;align-items:start;}
+@media(max-width:780px){.public-layout{grid-template-columns:1fr;}}
+.public-note{font-size:12.5px;color:var(--text-muted);margin-top:14px;text-align:center;}
 .link-btn{background:none;border:none;color:var(--accent);font-size:12.5px;cursor:pointer;text-decoration:underline;}
+.info-panel{display:flex;flex-direction:column;gap:12px;}
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.info-card .info-title{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:0 0 10px;}
+.info-card .info-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;font-size:13px;line-height:1.45;}
+.info-card .info-step:last-child{margin-bottom:0;}
+.info-card .step-num{font-family:var(--font-mono);font-size:11px;background:var(--accent-soft);color:var(--accent);border-radius:20px;padding:1px 7px;flex-shrink:0;margin-top:1px;}
+.gut-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:11.5px;padding:3px 9px;border-radius:6px;margin:2px;}
+
 .banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:13.5px;}
 .banner strong{color:var(--accent);}
 .config-warn{background:var(--rose-soft);border:1px solid var(--rose);border-radius:10px;padding:16px 18px;font-size:13.5px;line-height:1.5;}
@@ -155,8 +165,8 @@ footer button:hover{opacity:1;}
    CONFIGURAÇÃO — vem de window.APP_CONFIG, definido em config.js
    (arquivo fora do Git). Ver config.example.js para o modelo.
    ===================================================================== */
-const SUPABASE_URL      = 'https://gcdrjkqexfbuenpkvovo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjZHJqa3FleGZidWVucGt2b3ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NzU2MjksImV4cCI6MjA5OTE1MTYyOX0.vDjZxPxjsBEMk-UPEboV3uzE4wpqSvfl-XoaEw5x37Y';
+const SUPABASE_URL      = (window.APP_CONFIG && window.APP_CONFIG.SUPABASE_URL)      || '';
+const SUPABASE_ANON_KEY = (window.APP_CONFIG && window.APP_CONFIG.SUPABASE_ANON_KEY) || '';
 
 const CONFIGURED = SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.length > 20;
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -354,24 +364,52 @@ function renderPublic(){
   const g=gutBuffer; const score=gutScore(g); const gc=gutColor(score);
   app.innerHTML = `
     <div class="center-wrap">
-      <div class="header" style="justify-content:center">${flaskIcon(26)}<div style="text-align:center"><h1>Envie um problema</h1><p>Cultura de IA · sua dor entra na fila de priorização</p></div></div>
-      <div class="form-panel">
-        <form id="pubForm">
-          <div class="field"><label>Título do problema</label><input name="titulo" required placeholder="Ex: Conferência manual de contratos consome muitas horas"></div>
-          <div class="field-row">
-            <div class="field"><label>Seu nome</label><input name="solicitante" placeholder="Quem está enviando"></div>
-            <div class="field"><label>Área / setor</label><input name="area" placeholder="Ex: Crédito, Cobrança"></div>
-          </div>
-          <div class="field"><label>Descreva a dor <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="3" placeholder="Contexto, frequência, quem é afetado"></textarea></div>
-          <div class="field"><label>Impacto estimado <span class="hint">— tempo/dinheiro que isso custa, se souber</span></label><input name="impacto" placeholder="Ex: ~10h/semana da equipe"></div>
-          <div class="gut-block">
-            <div class="gut-head"><span class="gut-title">Matriz GUT — classifique seu problema</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div>
-            <div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div>
-          </div>
-          <div class="btn-row"><button class="btn" type="submit" id="pubBtn">Enviar para a fila</button></div>
-        </form>
+      <div class="header" style="margin-bottom:28px">
+        ${flaskIcon(28)}
+        <div class="grow"><h1 style="font-size:22px">Envie um problema</h1><p>Cultura de IA · sua dor entra na fila de priorização semanal</p></div>
+        <button class="link-btn" id="adminLink" style="white-space:nowrap;font-size:13px">Acesso administrativo</button>
       </div>
-      <p class="public-note"><button class="link-btn" id="adminLink">Acesso administrativo</button></p>
+      <div class="public-layout">
+        <div class="form-panel" style="margin-bottom:0">
+          <form id="pubForm">
+            <div class="field"><label>Título do problema</label><input name="titulo" required placeholder="Ex: Conferência manual de contratos consome muitas horas"></div>
+            <div class="field-row">
+              <div class="field"><label>Seu nome</label><input name="solicitante" placeholder="Quem está enviando"></div>
+              <div class="field"><label>Área / setor</label><input name="area" placeholder="Ex: Crédito, Cobrança, Atendimento"></div>
+            </div>
+            <div class="field"><label>Descreva a dor <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="4" placeholder="Contexto, frequência, quem é afetado e qual o impacto atual"></textarea></div>
+            <div class="field"><label>Impacto estimado <span class="hint">— tempo/dinheiro que isso custa, se souber</span></label><input name="impacto" placeholder="Ex: ~10h/semana da equipe, retrabalho constante"></div>
+            <div class="gut-block">
+              <div class="gut-head"><span class="gut-title">Matriz GUT — classifique seu problema</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div>
+              <div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div>
+            </div>
+            <div class="btn-row"><button class="btn" type="submit" id="pubBtn" style="padding:11px 24px;font-size:14px">Enviar para a fila</button></div>
+          </form>
+        </div>
+        <div class="info-panel">
+          <div class="info-card">
+            <div class="info-title">Como funciona</div>
+            <div class="info-step"><span class="step-num">1</span><span>Você descreve o problema e classifica pela <strong>Matriz GUT</strong> — Gravidade, Urgência e Tendência.</span></div>
+            <div class="info-step"><span class="step-num">2</span><span>Na <strong>sessão semanal</strong>, a equipe revisa a fila priorizada pelo score GUT e decide quais viram iniciativas de IA.</span></div>
+            <div class="info-step"><span class="step-num">3</span><span>Cada iniciativa implementada tem seus <strong>ganhos financeiros e operacionais</strong> registrados no dashboard.</span></div>
+          </div>
+          <div class="info-card">
+            <div class="info-title">Escala GUT</div>
+            <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">Score = G × U × T (máx. 125)</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px">
+              <span class="gut-pill" style="background:var(--rose-soft);color:var(--rose)">≥ 64 · Crítico</span>
+              <span class="gut-pill" style="background:var(--amber-soft);color:var(--amber)">≥ 27 · Alto</span>
+              <span class="gut-pill" style="background:var(--accent-soft);color:var(--accent)">≥ 8 · Médio</span>
+              <span class="gut-pill" style="background:var(--slate-soft);color:var(--slate)">< 8 · Baixo</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.5">Quanto maior o score, mais alto o problema sobe na fila. Os itens críticos são discutidos primeiro nas sessões.</div>
+          </div>
+          <div class="info-card" style="border-color:var(--accent);background:var(--accent-soft)">
+            <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:6px">Nome e área são opcionais</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5">Você pode enviar sem se identificar — o que importa é a descrição do problema e o impacto estimado.</div>
+          </div>
+        </div>
+      </div>
     </div>`;
   attachGutLive(app.querySelector('#pubForm'), true);
   app.querySelector('#adminLink').addEventListener('click', ()=>{ publicView='login'; render(); });
