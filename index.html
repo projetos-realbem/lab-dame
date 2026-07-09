@@ -102,7 +102,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body
 .gut-block .gut-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;}
 .gut-block .gut-head .gut-title{font-size:12.5px;color:var(--text-muted);font-weight:500;}
 .gut-block .gut-score{font-family:var(--font-mono);font-size:15px;font-weight:500;}
-.gut-scales{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.gut-scales{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end;}
 @media(max-width:600px){.gut-scales{grid-template-columns:1fr;}}
 .gut-scale label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:5px;font-weight:500;}
 
@@ -372,7 +372,7 @@ function renderPublic(){
       <div class="public-layout">
         <div class="form-panel" style="margin-bottom:0">
           <form id="pubForm">
-            <div class="field"><label>Título do problema</label><input name="titulo" required placeholder="Ex: Conferência manual de contratos consome muitas horas"></div>
+            <div class="field"><label>Título do problema <span style="color:var(--rose)">*</span></label><input name="titulo" required placeholder="Ex: Conferência manual de contratos consome muitas horas"></div>
             <div class="field-row">
               <div class="field"><label>Seu nome <span style="color:var(--rose)">*</span></label><input name="solicitante" required placeholder="Quem está enviando"></div>
               <div class="field"><label>Área / setor <span style="color:var(--rose)">*</span></label><input name="area" required placeholder="Ex: Crédito, Cobrança, Atendimento"></div>
@@ -520,7 +520,7 @@ function renderProblemasTab(content){
   attachProblemaDetailHandlers(content, detail);
 }
 
-function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}">${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
+function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span style="color:var(--rose)">*</span> <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}" required>${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
 function attachGutLive(form, isPublic){
   if(!form) return;
   const recalc=()=>{
