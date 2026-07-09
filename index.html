@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cultura de IA — Gestão de Iniciativas</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg:#0B0F1A; --surface:#131A2B; --surface-2:#1B2438; --border:#232E47;
+  --text:#E7ECF5; --text-muted:#8B96AC;
+  --accent:#2DD4BF; --accent-soft:rgba(45,212,191,0.12);
+  --amber:#F0A93B; --amber-soft:rgba(240,169,59,0.12);
+  --rose:#E5687A; --rose-soft:rgba(229,104,122,0.12);
+  --violet:#9D8CF0; --violet-soft:rgba(157,140,240,0.12);
+  --slate:#7C8AA5; --slate-soft:rgba(124,138,165,0.12);
+  --green:#4ADE80; --green-soft:rgba(74,222,128,0.12);
+  --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased;}
+#app{max-width:1040px;margin:0 auto;padding:28px 20px 60px;}
+
+.header{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
+.header .grow{flex:1;}
+.flask{flex-shrink:0;}
+.header h1{font-family:var(--font-display);font-size:21px;font-weight:600;margin:0;letter-spacing:-0.2px;}
+.header p{margin:2px 0 0;color:var(--text-muted);font-size:13px;}
+.header .who{font-size:12px;color:var(--text-muted);text-align:right;}
+.header .who .email{color:var(--text);font-family:var(--font-mono);font-size:11.5px;}
+
+.nav{display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:24px;flex-wrap:wrap;}
+.nav button{background:none;border:none;color:var(--text-muted);font-family:var(--font-body);font-size:14px;font-weight:500;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:7px;transition:color .15s;}
+.nav button:hover{color:var(--text);}
+.nav button.active{color:var(--accent);border-bottom-color:var(--accent);}
+.nav svg{width:15px;height:15px;}
+.nav .count-dot{font-family:var(--font-mono);font-size:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:0 6px;color:var(--text-muted);}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;}
+.section-title{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:0 0 12px;}
+
+.stat-strip{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
+.stat-pill{display:flex;align-items:baseline;gap:7px;padding:9px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);}
+.stat-pill .n{font-family:var(--font-mono);font-size:18px;font-weight:500;}
+.stat-pill .l{font-size:12px;color:var(--text-muted);}
+
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
+.hero-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;}
+.hero-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);}
+.hero-card.fin::before{background:var(--green);}
+.hero-card.op::before{background:var(--amber);}
+.hero-card.roi::before{background:var(--violet);}
+.hero-card .hero-label{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+.hero-card .hero-value{font-family:var(--font-mono);font-size:28px;font-weight:500;line-height:1;}
+.hero-card.fin .hero-value{color:var(--green);}
+.hero-card.op .hero-value{color:var(--amber);}
+.hero-card.roi .hero-value{color:var(--violet);}
+.hero-card .hero-sub{font-size:12px;color:var(--text-muted);margin-top:6px;}
+
+.bucket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:26px;}
+.bucket-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;border-left:3px solid var(--accent);}
+.bucket-card .num{font-family:var(--font-mono);font-size:26px;font-weight:500;color:var(--accent);}
+.bucket-card .label{font-size:12.5px;color:var(--text-muted);margin-top:2px;line-height:1.35;}
+.bucket-card .examples{margin-top:10px;font-size:12px;color:var(--text-muted);}
+.bucket-card .examples div{padding:3px 0;border-top:1px solid var(--border);}
+.bucket-card .examples div:first-child{border-top:none;}
+
+.list-row{display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--surface);cursor:pointer;transition:border-color .15s;}
+.list-row:hover{border-color:var(--accent);}
+.status-bar{width:3px;border-radius:2px;flex-shrink:0;align-self:stretch;}
+.list-row-body{flex:1;min-width:0;}
+.list-row-title{font-weight:600;font-size:14px;margin-bottom:3px;}
+.list-row-meta{font-size:12px;color:var(--text-muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.badge{font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.gut-badge{font-family:var(--font-mono);font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:6px;white-space:nowrap;}
+
+.filters{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.chip{font-size:12.5px;padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);cursor:pointer;}
+.chip.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);}
+
+.btn{font-family:var(--font-body);font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+.btn svg{width:14px;height:14px;}
+.btn:hover{background:rgba(45,212,191,0.2);}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--text-muted);}
+.btn-ghost:hover{color:var(--text);}
+.btn-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+.top-actions{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
+
+.form-panel{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:18px;}
+.field{margin-bottom:13px;}
+.field label{display:block;font-size:12.5px;color:var(--text-muted);margin-bottom:5px;font-weight:500;}
+.field .hint{font-weight:400;color:var(--slate);font-size:11.5px;}
+.field input,.field select,.field textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--font-body);font-size:13.5px;padding:9px 11px;border-radius:7px;resize:vertical;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+@media(max-width:600px){.field-row,.field-row-3{grid-template-columns:1fr;}}
+
+.gut-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:13px;}
+.gut-block .gut-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap;}
+.gut-block .gut-head .gut-title{font-size:12.5px;color:var(--text-muted);font-weight:500;}
+.gut-block .gut-score{font-family:var(--font-mono);font-size:15px;font-weight:500;}
+.gut-scales{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+@media(max-width:600px){.gut-scales{grid-template-columns:1fr;}}
+.gut-scale label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:5px;font-weight:500;}
+
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+@media(max-width:600px){.detail-grid{grid-template-columns:1fr;}}
+.detail-field .k{font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
+.detail-field .v{font-size:14px;line-height:1.5;}
+.detail-field .v.big{font-family:var(--font-mono);font-size:18px;}
+
+.empty{text-align:center;padding:50px 20px;color:var(--text-muted);}
+.empty svg{width:34px;height:34px;opacity:0.4;margin-bottom:10px;}
+.empty p{font-size:13.5px;margin:0;}
+
+.rank-num{font-family:var(--font-mono);font-size:16px;color:var(--text-muted);width:28px;text-align:center;flex-shrink:0;align-self:center;}
+.divider{height:1px;background:var(--border);margin:18px 0;}
+
+footer{margin-top:40px;display:flex;justify-content:center;gap:18px;flex-wrap:wrap;}
+footer button{background:none;border:none;color:var(--text-muted);font-size:11.5px;cursor:pointer;text-decoration:underline;opacity:0.6;}
+footer button:hover{opacity:1;}
+
+.loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-muted);font-size:13px;}
+.mini-bar-wrap{background:var(--surface-2);border-radius:4px;height:6px;overflow:hidden;margin-top:6px;}
+.mini-bar{height:100%;background:var(--accent);border-radius:4px;}
+
+/* toast */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 18px;border-radius:8px;font-size:13.5px;box-shadow:0 8px 30px rgba(0,0,0,.4);z-index:50;max-width:90%;}
+.toast.err{border-color:var(--rose);color:var(--rose);}
+.toast.ok{border-color:var(--green);color:var(--green);}
+
+/* public / login */
+.center-wrap{max-width:440px;margin:6vh auto 0;}
+.public-note{font-size:12.5px;color:var(--text-muted);margin-top:10px;text-align:center;}
+.link-btn{background:none;border:none;color:var(--accent);font-size:12.5px;cursor:pointer;text-decoration:underline;}
+.banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:13.5px;}
+.banner strong{color:var(--accent);}
+.config-warn{background:var(--rose-soft);border:1px solid var(--rose);border-radius:10px;padding:16px 18px;font-size:13.5px;line-height:1.5;}
+.config-warn code{font-family:var(--font-mono);background:var(--surface);padding:1px 5px;border-radius:4px;font-size:12px;}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Carregando…</div></div>
+<div id="toast-root"></div>
+
+<!-- Config local (NÃO versionada — ver config.example.js). Deve vir ANTES do SDK. -->
+<script src="config.js"></script>
+<!-- Supabase JS SDK (v2) via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* =====================================================================
+   CONFIGURAÇÃO — vem de window.APP_CONFIG, definido em config.js
+   (arquivo fora do Git). Ver config.example.js para o modelo.
+   ===================================================================== */
+const SUPABASE_URL      = 'https://gcdrjkqexfbuenpkvovo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjZHJqa3FleGZidWVucGt2b3ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NzU2MjksImV4cCI6MjA5OTE1MTYyOX0.vDjZxPxjsBEMk-UPEboV3uzE4wpqSvfl-XoaEw5x37Y';
+
+const CONFIGURED = SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.length > 20;
+const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+/* ===================== CONSTANTES ===================== */
+const STATUS = ['Priorizado','Em Implementação','Implementado','Descartado','Em Pausa'];
+const STATUS_COLOR = {
+  'Priorizado':{c:'var(--slate)',bg:'var(--slate-soft)'},
+  'Em Implementação':{c:'var(--amber)',bg:'var(--amber-soft)'},
+  'Implementado':{c:'var(--green)',bg:'var(--green-soft)'},
+  'Descartado':{c:'var(--rose)',bg:'var(--rose-soft)'},
+  'Em Pausa':{c:'var(--violet)',bg:'var(--violet-soft)'}
+};
+const PROB_STATUS = ['Novo','Em Análise','Priorizado','Recusado'];
+const PROB_STATUS_COLOR = {
+  'Novo':{c:'var(--accent)',bg:'var(--accent-soft)'},
+  'Em Análise':{c:'var(--amber)',bg:'var(--amber-soft)'},
+  'Priorizado':{c:'var(--green)',bg:'var(--green-soft)'},
+  'Recusado':{c:'var(--rose)',bg:'var(--rose-soft)'}
+};
+const BUCKETS = ['Tempo economizado','Custo reduzido','Solução construída internamente','Qualidade de entrega','Velocidade de decisão','Redução de risco ou inadimplência','Geração de receita ou conversão'];
+const GUT_LABELS = {
+  gravidade:{titulo:'Gravidade',hint:'Impacto se nada for feito',opcoes:[[1,'1 · Sem gravidade'],[2,'2 · Pouco grave'],[3,'3 · Grave'],[4,'4 · Muito grave'],[5,'5 · Extremamente grave']]},
+  urgencia:{titulo:'Urgência',hint:'Prazo para agir',opcoes:[[1,'1 · Pode esperar'],[2,'2 · Pouco urgente'],[3,'3 · Urgente, prazo médio'],[4,'4 · Muito urgente'],[5,'5 · Ação imediata']]},
+  tendencia:{titulo:'Tendência',hint:'Como evolui se ignorado',opcoes:[[1,'1 · Não vai piorar'],[2,'2 · Piora no longo prazo'],[3,'3 · Piora com o tempo'],[4,'4 · Piora rápido'],[5,'5 · Piora imediatamente']]}
+};
+function gutScore(p){ const g=Number(p.gravidade)||0,u=Number(p.urgencia)||0,t=Number(p.tendencia)||0; return g*u*t; }
+function gutColor(s){ if(s>=64)return{c:'var(--rose)',bg:'var(--rose-soft)',label:'Crítico'}; if(s>=27)return{c:'var(--amber)',bg:'var(--amber-soft)',label:'Alto'}; if(s>=8)return{c:'var(--accent)',bg:'var(--accent-soft)',label:'Médio'}; return{c:'var(--slate)',bg:'var(--slate-soft)',label:'Baixo'}; }
+const FORMATOS = ['Priorização semanal','Demo de caso','Exploração de técnica','Review de resultado','Outro'];
+
+/* ===================== ESTADO ===================== */
+let session = null;          // sessão Supabase Auth (admin logado)
+let isAdmin = false;         // usuário logado consta em `admins`?
+let cache = { problemas: [], iniciativas: [], sessoes: [] };
+let currentTab = 'dashboard';
+let filterStatus = 'all';
+let filterProbStatus = 'all';
+let openForm = null;
+let openDetail = null;
+let gutBuffer = {gravidade:3, urgencia:3, tendencia:3};
+let publicView = 'form';     // tela pública: 'form' | 'sent'
+let busy = false;
+
+/* ===================== HELPERS ===================== */
+function esc(s){ if(s===undefined||s===null)return''; return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtDate(d){ if(!d)return'—'; const [y,m,day]=String(d).split('-'); return day&&m&&y?`${day}/${m}/${y}`:d; }
+function fmtMoney(n){ return 'R$ '+(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function fmtHoras(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'h'; }
+function toast(msg, kind){
+  const root=document.getElementById('toast-root');
+  root.innerHTML=`<div class="toast ${kind||''}">${esc(msg)}</div>`;
+  setTimeout(()=>{ root.innerHTML=''; }, 3200);
+}
+function today(){ return new Date().toISOString().slice(0,10); }
+
+/* ===================== DATA LAYER (Supabase) ===================== */
+async function refreshAll(){
+  if(!sb) return;
+  const [pr, ini, ses] = await Promise.all([
+    sb.from('problemas').select('*'),
+    sb.from('iniciativas').select('*'),
+    sb.from('sessoes').select('*')
+  ]);
+  if(pr.error && pr.error.code!=='42501') console.error(pr.error);
+  cache.problemas   = pr.data   || [];
+  cache.iniciativas = ini.data  || [];
+  cache.sessoes     = ses.data  || [];
+}
+
+async function insertProblemaPublic(payload){
+  // usado sem login — só INSERT é permitido pelo RLS
+  const { error } = await sb.from('problemas').insert(payload);
+  return error;
+}
+async function insertRow(table, payload){
+  const { data, error } = await sb.from(table).insert(payload).select().single();
+  return { data, error };
+}
+async function updateRow(table, id, patch){
+  const { error } = await sb.from(table).update(patch).eq('id', id);
+  return error;
+}
+async function deleteRow(table, id){
+  const { error } = await sb.from(table).delete().eq('id', id);
+  return error;
+}
+
+/* ===================== AUTH ===================== */
+async function checkAdmin(){
+  // O usuário logado consta na tabela admins? Fazemos uma leitura protegida:
+  // se conseguir ler problemas (SELECT só admin), é admin. Simples e sem expor a tabela admins.
+  const { error } = await sb.from('problemas').select('id').limit(1);
+  isAdmin = !error;
+  return isAdmin;
+}
+async function doLogin(email, senha){
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+  if(error) return error;
+  session = data.session;
+  await checkAdmin();
+  if(!isAdmin){
+    await sb.auth.signOut();
+    session = null;
+    return { message: 'Este usuário não é administrador.' };
+  }
+  return null;
+}
+async function doLogout(){
+  await sb.auth.signOut();
+  session = null; isAdmin = false;
+  currentTab='dashboard'; openForm=null; openDetail=null;
+  render();
+}
+
+/* ===================== ÍCONES ===================== */
+function flaskIcon(size=20){return `<svg class="flask" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6"/><path d="M10 2v6.5L4.5 18a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 8.5V2"/><path d="M7.5 14.5h9"/></svg>`;}
+function iconDash(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>`;}
+function iconInbox(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`;}
+function iconRocket(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`;}
+function iconCal(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;}
+function iconLock(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;}
+
+/* ===================== BOOT / ROOT RENDER ===================== */
+async function boot(){
+  if(!CONFIGURED){ renderConfigWarning(); return; }
+  const { data } = await sb.auth.getSession();
+  session = data.session || null;
+  if(session){ await checkAdmin(); if(isAdmin) await refreshAll(); }
+  render();
+  sb.auth.onAuthStateChange((_e, s)=>{ session = s; });
+}
+
+function render(){
+  if(!CONFIGURED){ renderConfigWarning(); return; }
+  if(isAdmin) return renderAdminApp();
+  return renderPublic();
+}
+
+function renderConfigWarning(){
+  document.getElementById('app').innerHTML = `
+    <div class="header">${flaskIcon(26)}<div><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Configuração necessária</p></div></div>
+    <div class="config-warn">
+      <strong>Falta configurar o Supabase.</strong><br>
+      Crie um arquivo <code>config.js</code> na mesma pasta (copie de <code>config.example.js</code>)
+      e preencha <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> com os dados do seu
+      projeto (Settings → API).<br><br>
+      Rode também o arquivo <code>supabase-schema.sql</code> no SQL Editor para criar as tabelas e o RLS.
+    </div>`;
+}
+
+/* ===================== TELA PÚBLICA (sem login) ===================== */
+function renderPublic(){
+  const app = document.getElementById('app');
+  if(publicView==='sent'){
+    app.innerHTML = `
+      <div class="center-wrap">
+        <div class="header" style="justify-content:center">${flaskIcon(26)}<div><h1>Problema enviado</h1></div></div>
+        <div class="card" style="text-align:center">
+          <div style="color:var(--green);font-size:15px;margin-bottom:8px">✓ Recebemos seu problema</div>
+          <p style="color:var(--text-muted);font-size:13.5px;margin:0 0 16px">Ele entra na fila e será avaliado e priorizado por GUT na próxima sessão semanal.</p>
+          <button class="btn" id="againBtn">Enviar outro problema</button>
+        </div>
+        <p class="public-note"><button class="link-btn" id="adminLink">Acesso administrativo</button></p>
+      </div>`;
+    app.querySelector('#againBtn').addEventListener('click', ()=>{ gutBuffer={gravidade:3,urgencia:3,tendencia:3}; publicView='form'; render(); });
+    app.querySelector('#adminLink').addEventListener('click', ()=>{ publicView='login'; render(); });
+    return;
+  }
+  if(publicView==='login'){
+    app.innerHTML = `
+      <div class="center-wrap">
+        <div class="header" style="justify-content:center">${flaskIcon(26)}<div><h1>Acesso administrativo</h1></div></div>
+        <div class="form-panel">
+          <form id="loginForm">
+            <div class="field"><label>E-mail</label><input name="email" type="email" required placeholder="voce@empresa.com"></div>
+            <div class="field"><label>Senha</label><input name="senha" type="password" required></div>
+            <div class="btn-row"><button class="btn" type="submit" id="loginBtn">${iconLock()} Entrar</button><button type="button" class="btn btn-ghost" id="backToForm">Voltar</button></div>
+          </form>
+        </div>
+      </div>`;
+    app.querySelector('#backToForm').addEventListener('click', ()=>{ publicView='form'; render(); });
+    app.querySelector('#loginForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const b=app.querySelector('#loginBtn'); b.disabled=true; b.textContent='Entrando…';
+      const fd=new FormData(e.target);
+      const err=await doLogin(fd.get('email').trim(), fd.get('senha'));
+      if(err){ toast(err.message||'Falha no login', 'err'); b.disabled=false; b.innerHTML=`${iconLock()} Entrar`; return; }
+      await refreshAll();
+      publicView='form'; currentTab='dashboard';
+      render();
+    });
+    return;
+  }
+  // form público de envio
+  const g=gutBuffer; const score=gutScore(g); const gc=gutColor(score);
+  app.innerHTML = `
+    <div class="center-wrap">
+      <div class="header" style="justify-content:center">${flaskIcon(26)}<div style="text-align:center"><h1>Envie um problema</h1><p>Cultura de IA · sua dor entra na fila de priorização</p></div></div>
+      <div class="form-panel">
+        <form id="pubForm">
+          <div class="field"><label>Título do problema</label><input name="titulo" required placeholder="Ex: Conferência manual de contratos consome muitas horas"></div>
+          <div class="field-row">
+            <div class="field"><label>Seu nome</label><input name="solicitante" placeholder="Quem está enviando"></div>
+            <div class="field"><label>Área / setor</label><input name="area" placeholder="Ex: Crédito, Cobrança"></div>
+          </div>
+          <div class="field"><label>Descreva a dor <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="3" placeholder="Contexto, frequência, quem é afetado"></textarea></div>
+          <div class="field"><label>Impacto estimado <span class="hint">— tempo/dinheiro que isso custa, se souber</span></label><input name="impacto" placeholder="Ex: ~10h/semana da equipe"></div>
+          <div class="gut-block">
+            <div class="gut-head"><span class="gut-title">Matriz GUT — classifique seu problema</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div>
+            <div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div>
+          </div>
+          <div class="btn-row"><button class="btn" type="submit" id="pubBtn">Enviar para a fila</button></div>
+        </form>
+      </div>
+      <p class="public-note"><button class="link-btn" id="adminLink">Acesso administrativo</button></p>
+    </div>`;
+  attachGutLive(app.querySelector('#pubForm'), true);
+  app.querySelector('#adminLink').addEventListener('click', ()=>{ publicView='login'; render(); });
+  app.querySelector('#pubForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const b=app.querySelector('#pubBtn'); b.disabled=true; b.textContent='Enviando…';
+    const fd=new FormData(e.target); const d=Object.fromEntries(fd.entries());
+    const payload={ titulo:d.titulo, solicitante:d.solicitante||null, area:d.area||null, descricao:d.descricao||null, impacto:d.impacto||null, gravidade:gutBuffer.gravidade, urgencia:gutBuffer.urgencia, tendencia:gutBuffer.tendencia, status:'Novo' };
+    const err=await insertProblemaPublic(payload);
+    if(err){ toast('Não foi possível enviar. Tente de novo.', 'err'); console.error(err); b.disabled=false; b.textContent='Enviar para a fila'; return; }
+    publicView='sent'; render();
+  });
+}
+
+/* ===================== APP ADMIN ===================== */
+function renderAdminApp(){
+  const app=document.getElementById('app');
+  const novos = cache.problemas.filter(p=>p.status==='Novo').length;
+  app.innerHTML=`
+    <div class="header">
+      ${flaskIcon(26)}
+      <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · matriz GUT · priorização semanal · ganhos</p></div>
+      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button></div>
+    </div>
+    <div class="nav">
+      <button data-tab="dashboard" class="${currentTab==='dashboard'?'active':''}">${iconDash()} Dashboard</button>
+      <button data-tab="problemas" class="${currentTab==='problemas'?'active':''}">${iconInbox()} Problemas ${novos?`<span class="count-dot">${novos}</span>`:''}</button>
+      <button data-tab="iniciativas" class="${currentTab==='iniciativas'?'active':''}">${iconRocket()} Iniciativas</button>
+      <button data-tab="sessoes" class="${currentTab==='sessoes'?'active':''}">${iconCal()} Sessões</button>
+    </div>
+    <div id="content"></div>
+    <footer><button id="refreshBtn">recarregar dados</button></footer>`;
+  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; render(); }));
+  app.querySelector('#logoutBtn').addEventListener('click', doLogout);
+  app.querySelector('#refreshBtn').addEventListener('click', async ()=>{ await refreshAll(); render(); toast('Dados recarregados','ok'); });
+
+  const content=document.getElementById('content');
+  if(currentTab==='dashboard') content.innerHTML=renderDashboard();
+  if(currentTab==='problemas') renderProblemasTab(content);
+  if(currentTab==='iniciativas') renderIniciativasTab(content);
+  if(currentTab==='sessoes') renderSessoesTab(content);
+}
+
+/* ===================== DASHBOARD ===================== */
+function renderDashboard(){
+  const casos=cache.iniciativas;
+  const implementadas=casos.filter(c=>c.status==='Implementado');
+  const emAndamento=casos.filter(c=>c.status==='Em Implementação');
+  const ganhoFin=implementadas.reduce((s,c)=>s+(Number(c.ganho_fin)||0),0);
+  const ganhoOp=implementadas.reduce((s,c)=>s+(Number(c.ganho_op)||0),0);
+  const custoTotal=implementadas.reduce((s,c)=>s+(Number(c.custo)||0),0);
+  const roi=custoTotal>0?((ganhoFin*12-custoTotal)/custoTotal*100):null;
+  const potencialFin=emAndamento.reduce((s,c)=>s+(Number(c.ganho_fin)||0),0);
+
+  const heroHtml=`
+    <div class="hero-card fin"><div class="hero-label">Ganho financeiro / mês</div><div class="hero-value">${fmtMoney(ganhoFin)}</div><div class="hero-sub">${implementadas.length} iniciativa(s) implementada(s)${potencialFin?` · +${fmtMoney(potencialFin)} em andamento`:''}</div></div>
+    <div class="hero-card op"><div class="hero-label">Ganho operacional / mês</div><div class="hero-value">${fmtHoras(ganhoOp)}</div><div class="hero-sub">Horas economizadas por mês</div></div>
+    <div class="hero-card roi"><div class="hero-label">Retorno anualizado</div><div class="hero-value">${roi===null?'—':(roi>=0?'+':'')+Math.round(roi)+'%'}</div><div class="hero-sub">${custoTotal>0?`Sobre ${fmtMoney(custoTotal)} investidos`:'Informe custos nas iniciativas'}</div></div>`;
+
+  const funil=`<div class="stat-strip">
+    <div class="stat-pill" style="background:var(--accent-soft);border-color:var(--accent)33"><span class="n" style="color:var(--accent)">${cache.problemas.filter(p=>p.status==='Novo'||p.status==='Em Análise').length}</span><span class="l">Problemas na fila</span></div>
+    ${STATUS.map(s=>{const col=STATUS_COLOR[s];const n=casos.filter(c=>c.status===s).length;return `<div class="stat-pill" style="background:${col.bg};border-color:${col.c}33"><span class="n" style="color:${col.c}">${n}</span><span class="l">${s}</span></div>`;}).join('')}
+  </div>`;
+
+  const bucketsHtml=BUCKETS.map(b=>{
+    const cb=casos.filter(c=>c.bucket===b&&c.status==='Implementado');
+    const ex=cb.slice(0,2).map(c=>`<div>${esc(c.codigo||'')} ${esc(c.titulo)}${c.resultado?' — '+esc(c.resultado):''}</div>`).join('');
+    return `<div class="bucket-card"><div class="num">${cb.length}</div><div class="label">${b}</div>${ex?`<div class="examples">${ex}</div>`:''}</div>`;
+  }).join('');
+
+  const ranked=[...casos].filter(c=>c.status==='Implementado'||c.status==='Em Implementação').sort((a,b)=>(Number(b.ganho_fin)||0)-(Number(a.ganho_fin)||0)).slice(0,6);
+  const maxFin=ranked.length?Math.max(...ranked.map(c=>Number(c.ganho_fin)||0),1):1;
+  const rankHtml=ranked.length?ranked.map(c=>{const col=STATUS_COLOR[c.status];const w=Math.max(4,(Number(c.ganho_fin)||0)/maxFin*100);return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.codigo||'')} ${esc(c.titulo)}</span><span style="font-family:var(--font-mono);color:var(--green);white-space:nowrap">${fmtMoney(c.ganho_fin)}/mês</span></div><div class="mini-bar-wrap"><div class="mini-bar" style="width:${w}%;background:${col.c}"></div></div></div>`;}).join(''):`<div class="empty"><p>Nenhuma iniciativa com ganho registrado ainda.</p></div>`;
+
+  const recent=[...cache.sessoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).slice(0,3);
+  const sessoesHtml=recent.length?recent.map(s=>`<div class="list-row" style="cursor:default"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span></div></div></div>`).join(''):`<div class="empty"><p>Nenhuma sessão registrada ainda.</p></div>`;
+
+  return `<div class="section-title">Ganhos consolidados</div><div class="hero-grid">${heroHtml}</div>
+    <div class="section-title">Funil de iniciativas</div>${funil}
+    <div class="section-title" style="margin-top:22px">Top iniciativas por ganho financeiro</div><div class="card" style="margin-bottom:24px">${rankHtml}</div>
+    <div class="section-title">Impacto por categoria (implementadas)</div><div class="bucket-grid">${bucketsHtml}</div>
+    <div class="section-title">Últimas sessões</div><div class="card">${sessoesHtml}</div>`;
+}
+
+/* ===================== PROBLEMAS (admin) ===================== */
+function renderProblemasTab(content){
+  const detail = openDetail&&openDetail.type==='problema' ? cache.problemas.find(p=>p.id===openDetail.id) : null;
+  let list=cache.problemas;
+  if(filterProbStatus!=='all') list=list.filter(p=>p.status===filterProbStatus);
+  list=[...list].sort((a,b)=>gutScore(b)-gutScore(a)||(new Date(b.criado_em)-new Date(a.criado_em)));
+
+  let html=`<div class="top-actions"><div class="filters"><div class="chip ${filterProbStatus==='all'?'active':''}" data-pf="all">Todos</div>${PROB_STATUS.map(s=>`<div class="chip ${filterProbStatus===s?'active':''}" data-pf="${s}">${s}</div>`).join('')}</div><button class="btn" id="newProbBtn">+ Novo problema</button></div>`;
+
+  if(openForm==='problema') html+=problemaFormHtml(detail);
+  else if(detail) html+=problemaDetailHtml(detail);
+
+  if(!openForm&&!detail){
+    if(list.length){
+      html+=`<div class="section-title">Fila priorizada por GUT (maior score no topo)</div>`;
+      html+=list.map((p,i)=>{const score=gutScore(p);const gc=gutColor(score);const sc=PROB_STATUS_COLOR[p.status];return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
+    } else html+=`<div class="empty">${iconInbox()}<p>Nenhum problema nesse filtro.</p></div>`;
+  }
+  content.innerHTML=html;
+  content.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;render();}));
+  const nb=content.querySelector('#newProbBtn'); if(nb) nb.addEventListener('click',()=>{gutBuffer={gravidade:3,urgencia:3,tendencia:3};openForm='problema';openDetail=null;render();});
+  content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'problema',id:r.dataset.openprob};render();}));
+  attachProblemaFormHandlers(content, detail);
+  attachProblemaDetailHandlers(content, detail);
+}
+
+function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}">${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
+function attachGutLive(form, isPublic){
+  if(!form) return;
+  const recalc=()=>{
+    const g=Number(form.querySelector('[data-gut="gravidade"]').value),u=Number(form.querySelector('[data-gut="urgencia"]').value),t=Number(form.querySelector('[data-gut="tendencia"]').value);
+    gutBuffer={gravidade:g,urgencia:u,tendencia:t};
+    const gc=gutColor(g*u*t);const el=form.querySelector('#gutScoreLive');
+    if(el){el.textContent=`GUT ${g*u*t} · ${gc.label}`;el.style.color=gc.c;}
+  };
+  form.querySelectorAll('[data-gut]').forEach(s=>s.addEventListener('change',recalc));
+}
+
+function problemaFormHtml(editing){
+  const p=editing||{};
+  const g=editing?{gravidade:p.gravidade,urgencia:p.urgencia,tendencia:p.tendencia}:gutBuffer;
+  const score=gutScore(g);const gc=gutColor(score);
+  return `<div class="form-panel"><div class="section-title">${editing?'Editar problema':'Novo problema'}</div><form id="probForm">
+    <div class="field"><label>Título</label><input name="titulo" required value="${esc(p.titulo)}"></div>
+    <div class="field-row"><div class="field"><label>Solicitante</label><input name="solicitante" value="${esc(p.solicitante)}"></div><div class="field"><label>Área</label><input name="area" value="${esc(p.area)}"></div></div>
+    <div class="field"><label>Descrição da dor</label><textarea name="descricao" rows="3">${esc(p.descricao)}</textarea></div>
+    <div class="field"><label>Impacto estimado</label><input name="impacto" value="${esc(p.impacto)}"></div>
+    <div class="gut-block"><div class="gut-head"><span class="gut-title">Matriz GUT</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div></div>
+    ${editing?`<div class="field"><label>Status</label><select name="status">${PROB_STATUS.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
+    <div class="btn-row"><button type="submit" class="btn" id="saveProb">Salvar</button><button type="button" class="btn btn-ghost" id="cancelProb">Cancelar</button></div>
+  </form></div>`;
+}
+function attachProblemaFormHandlers(content,editing){
+  const form=content.querySelector('#probForm'); if(!form) return;
+  content.querySelector('#cancelProb').addEventListener('click',()=>{openForm=null;render();});
+  attachGutLive(form, false);
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault(); if(busy)return; busy=true;
+    const b=content.querySelector('#saveProb'); b.disabled=true;
+    const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
+    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:d.impacto||null,gravidade:gutBuffer.gravidade,urgencia:gutBuffer.urgencia,tendencia:gutBuffer.tendencia};
+    let err;
+    if(editing){ payload.status=d.status; err=await updateRow('problemas',editing.id,payload); }
+    else { payload.status='Novo'; err=(await insertRow('problemas',payload)).error; }
+    busy=false;
+    if(err){ toast('Erro ao salvar','err'); console.error(err); b.disabled=false; return; }
+    await refreshAll(); openForm=null; render(); toast('Salvo','ok');
+  });
+}
+function problemaDetailHtml(p){
+  const score=gutScore(p);const gc=gutColor(score);const sc=PROB_STATUS_COLOR[p.status];
+  const jaPromovido=cache.iniciativas.some(c=>c.problema_id===p.id);
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editProbBtn">Editar</button><button class="btn btn-ghost" id="deleteProbBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeProbBtn">Voltar</button></div></div>
+    <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(p.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(p.titulo)}</div></div>
+    <div class="detail-grid"><div class="detail-field"><div class="k">Solicitante</div><div class="v">${esc(p.solicitante)||'—'}</div></div><div class="detail-field"><div class="k">Área</div><div class="v">${esc(p.area)||'—'}</div></div><div class="detail-field"><div class="k">Gravidade</div><div class="v big">${p.gravidade||'—'}</div></div><div class="detail-field"><div class="k">Urgência</div><div class="v big">${p.urgencia||'—'}</div></div><div class="detail-field"><div class="k">Tendência</div><div class="v big">${p.tendencia||'—'}</div></div><div class="detail-field"><div class="k">Score GUT</div><div class="v big" style="color:${gc.c}">${score}</div></div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Descrição</div><div class="v">${esc(p.descricao)||'—'}</div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Impacto estimado</div><div class="v">${esc(p.impacto)||'—'}</div></div>
+    <div class="divider"></div>
+    ${jaPromovido?`<div class="detail-field"><div class="k">Iniciativa</div><div class="v" style="color:var(--green)">✓ Já promovido para iniciativa</div></div>`:`<div class="btn-row" style="margin-top:0"><button class="btn" id="promoteBtn">${iconRocket()} Priorizar → virar iniciativa</button>${p.status!=='Recusado'?`<button class="btn btn-ghost" id="recusarBtn" style="color:var(--rose)">Recusar</button>`:''}</div><p style="font-size:12px;color:var(--text-muted);margin-top:10px">Use na sessão semanal: os de maior GUT sobem para priorização e viram iniciativas.</p>`}
+  </div>`;
+}
+function attachProblemaDetailHandlers(content,p){
+  if(!p) return;
+  content.querySelector('#closeProbBtn').addEventListener('click',()=>{openDetail=null;render();});
+  content.querySelector('#editProbBtn').addEventListener('click',()=>{openForm='problema';render();});
+  content.querySelector('#deleteProbBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir este problema?'))return; const err=await deleteRow('problemas',p.id); if(err){toast('Erro ao excluir','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+  const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await refreshAll(); render(); });
+  const pr=content.querySelector('#promoteBtn'); if(pr) pr.addEventListener('click', async ()=>{
+    const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Priorizado',data:today(),problema:p.descricao||p.titulo,ganho_fin:0,ganho_op:0,custo:0};
+    const {data,error}=await insertRow('iniciativas',novo);
+    if(error){toast('Erro ao promover','err');console.error(error);return;}
+    await updateRow('problemas',p.id,{status:'Priorizado'});
+    await refreshAll();
+    currentTab='iniciativas'; openDetail={type:'caso',id:data.id}; openForm=null; render(); toast('Virou iniciativa','ok');
+  });
+}
+
+/* ===================== INICIATIVAS (admin) ===================== */
+function renderIniciativasTab(content){
+  let list=cache.iniciativas;
+  if(filterStatus!=='all') list=list.filter(c=>c.status===filterStatus);
+  list=[...list].sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em));
+  const detail=openDetail&&openDetail.type==='caso'?cache.iniciativas.find(c=>c.id===openDetail.id):null;
+
+  let html=`<div class="top-actions"><div class="filters"><div class="chip ${filterStatus==='all'?'active':''}" data-f="all">Todas</div>${STATUS.map(s=>`<div class="chip ${filterStatus===s?'active':''}" data-f="${s}">${s}</div>`).join('')}</div><button class="btn" id="newCasoBtn">+ Nova iniciativa</button></div>`;
+  if(openForm==='caso') html+=casoFormHtml(detail);
+  else if(detail) html+=casoDetailHtml(detail);
+
+  if(!openForm&&!detail){
+    html+=list.length?list.map(c=>{const col=STATUS_COLOR[c.status];const tg=(Number(c.ganho_fin)||0)>0||(Number(c.ganho_op)||0)>0;return `<div class="list-row" data-open="${c.id}"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(c.codigo||'')}</span>${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><span>${esc(c.area||'—')}</span><span>${esc(c.dono||'—')}</span>${tg?`<span style="color:var(--green);font-family:var(--font-mono)">${(Number(c.ganho_fin)||0)>0?fmtMoney(c.ganho_fin)+'/mês':''}${(Number(c.ganho_fin)||0)>0&&(Number(c.ganho_op)||0)>0?' · ':''}${(Number(c.ganho_op)||0)>0?fmtHoras(c.ganho_op)+'/mês':''}</span>`:''}</div></div></div>`;}).join(''):`<div class="empty">${iconRocket()}<p>Nenhuma iniciativa nesse filtro.</p></div>`;
+  }
+  content.innerHTML=html;
+  content.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;render();}));
+  const nb=content.querySelector('#newCasoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='caso';openDetail=null;render();});
+  content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'caso',id:r.dataset.open};render();}));
+  attachCasoFormHandlers(content,detail);
+  attachCasoDetailHandlers(content,detail);
+}
+function casoFormHtml(editing){
+  const c=editing||{};
+  const prob=c.problema_id?cache.problemas.find(p=>p.id===c.problema_id):null;
+  return `<div class="form-panel"><div class="section-title">${editing?'Editar iniciativa':'Nova iniciativa'}</div><form id="casoForm">
+    ${prob?`<div class="field"><label>Problema de origem</label><div class="v" style="font-size:13px;color:var(--accent)">${esc(prob.codigo)} · ${esc(prob.titulo)}</div></div>`:''}
+    <div class="field"><label>Título</label><input name="titulo" required value="${esc(c.titulo)}"></div>
+    <div class="field-row"><div class="field"><label>Área</label><input name="area" value="${esc(c.area)}"></div><div class="field"><label>Dono</label><input name="dono" value="${esc(c.dono)}"></div></div>
+    <div class="field"><label>Sessão de priorização (opcional)</label><select name="sessao_id"><option value="">— nenhuma —</option>${[...cache.sessoes].sort((a,b)=>(a.data||'').localeCompare(b.data||'')).map(s=>`<option value="${s.id}" ${c.sessao_id===s.id?'selected':''}>${esc(s.codigo||'')} · ${fmtDate(s.data)}${s.ancora?' · '+esc(s.ancora):''}</option>`).join('')}</select></div>
+    <div class="field-row"><div class="field"><label>Status</label><select name="status">${STATUS.map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Data</label><input type="date" name="data" value="${esc(c.data)}"></div></div>
+    <div class="field"><label>Problema que resolve</label><input name="problema" value="${esc(c.problema)}"></div>
+    <div class="field"><label>Solução implementada</label><textarea name="testado" rows="2">${esc(c.testado)}</textarea></div>
+    <div class="divider"></div><div class="section-title">Ganhos e custo</div>
+    <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="number" min="0" step="100" name="ganho_fin" value="${esc(c.ganho_fin)}"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="number" min="0" step="1" name="ganho_op" value="${esc(c.ganho_op)}"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="number" min="0" step="100" name="custo" value="${esc(c.custo)}"></div></div>
+    <div class="field-row"><div class="field"><label>Categoria de impacto</label><select name="bucket"><option value="">Selecionar...</option>${BUCKETS.map(b=>`<option ${c.bucket===b?'selected':''}>${b}</option>`).join('')}</select></div><div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div></div>
+    <div class="field"><label>Decisão final</label><input name="decisao" value="${esc(c.decisao)}"></div>
+    <div class="btn-row"><button type="submit" class="btn" id="saveCaso">Salvar</button><button type="button" class="btn btn-ghost" id="cancelCaso">Cancelar</button></div>
+  </form></div>`;
+}
+function attachCasoFormHandlers(content,editing){
+  const form=content.querySelector('#casoForm'); if(!form) return;
+  content.querySelector('#cancelCaso').addEventListener('click',()=>{openForm=null;render();});
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault(); if(busy)return; busy=true;
+    const b=content.querySelector('#saveCaso'); b.disabled=true;
+    const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,sessao_id:d.sessao_id||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:Number(d.ganho_fin)||0,ganho_op:Number(d.ganho_op)||0,custo:Number(d.custo)||0};
+    let err;
+    if(editing) err=await updateRow('iniciativas',editing.id,payload);
+    else err=(await insertRow('iniciativas',payload)).error;
+    busy=false;
+    if(err){toast('Erro ao salvar','err');console.error(err);b.disabled=false;return;}
+    await refreshAll(); openForm=null; render(); toast('Salvo','ok');
+  });
+}
+function casoDetailHtml(c){
+  const col=STATUS_COLOR[c.status];
+  const ses=c.sessao_id?cache.sessoes.find(s=>s.id===c.sessao_id):null;
+  const prob=c.problema_id?cache.problemas.find(p=>p.id===c.problema_id):null;
+  const gf=Number(c.ganho_fin)||0,go=Number(c.ganho_op)||0,cu=Number(c.custo)||0;
+  const payback=(gf>0&&cu>0)?(cu/gf):null;
+  let pb='—'; if(payback!==null){ pb=payback<1?'<1 mês':Math.round(payback)+(Math.round(payback)===1?' mês':' meses'); }
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editCasoBtn">Editar</button><button class="btn btn-ghost" id="deleteCasoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeCasoBtn">Voltar</button></div></div>
+    <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(c.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(c.titulo)}</div></div>
+    <div class="hero-grid" style="margin-bottom:16px"><div class="hero-card fin"><div class="hero-label">Ganho financeiro</div><div class="hero-value">${gf>0?fmtMoney(gf):'—'}</div><div class="hero-sub">${gf>0?'por mês':'não informado'}</div></div><div class="hero-card op"><div class="hero-label">Ganho operacional</div><div class="hero-value">${go>0?fmtHoras(go):'—'}</div><div class="hero-sub">${go>0?'por mês':'não informado'}</div></div><div class="hero-card roi"><div class="hero-label">Payback</div><div class="hero-value">${pb}</div><div class="hero-sub">${cu>0?'Custo: '+fmtMoney(cu):'informe custo'}</div></div></div>
+    <div class="detail-grid"><div class="detail-field"><div class="k">Área</div><div class="v">${esc(c.area)||'—'}</div></div><div class="detail-field"><div class="k">Dono</div><div class="v">${esc(c.dono)||'—'}</div></div><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(c.data)}</div></div><div class="detail-field"><div class="k">Categoria</div><div class="v">${esc(c.bucket)||'—'}</div></div>${prob?`<div class="detail-field"><div class="k">Problema de origem</div><div class="v"><a href="#" id="gotoProbBtn" style="color:var(--accent);text-decoration:none">${esc(prob.codigo)} · GUT ${gutScore(prob)}</a></div></div>`:''}<div class="detail-field"><div class="k">Sessão</div><div class="v">${ses?`<a href="#" id="gotoSessaoBtn" style="color:var(--accent);text-decoration:none">${esc(ses.codigo)} · ${fmtDate(ses.data)}</a>`:'—'}</div></div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Problema</div><div class="v">${esc(c.problema)||'—'}</div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Solução implementada</div><div class="v">${esc(c.testado)||'—'}</div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Resultado</div><div class="v">${esc(c.resultado)||'—'}</div></div>
+    <div class="detail-field"><div class="k">Decisão</div><div class="v">${esc(c.decisao)||'—'}</div></div>
+  </div>`;
+}
+function attachCasoDetailHandlers(content,c){
+  if(!c) return;
+  content.querySelector('#closeCasoBtn').addEventListener('click',()=>{openDetail=null;render();});
+  content.querySelector('#editCasoBtn').addEventListener('click',()=>{openForm='caso';render();});
+  const gs=content.querySelector('#gotoSessaoBtn'); if(gs) gs.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:c.sessao_id};render();});
+  const gp=content.querySelector('#gotoProbBtn'); if(gp) gp.addEventListener('click',(e)=>{e.preventDefault();currentTab='problemas';openDetail={type:'problema',id:c.problema_id};render();});
+  content.querySelector('#deleteCasoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta iniciativa?'))return; const err=await deleteRow('iniciativas',c.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+}
+
+/* ===================== SESSÕES (admin) ===================== */
+function renderSessoesTab(content){
+  const detail=openDetail&&openDetail.type==='sessao'?cache.sessoes.find(s=>s.id===openDetail.id):null;
+  const list=[...cache.sessoes].sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  let html=`<div class="top-actions"><div class="section-title" style="margin:0">Sessões semanais de priorização</div><button class="btn" id="newSessaoBtn">+ Nova sessão</button></div>`;
+  if(openForm==='sessao') html+=sessaoFormHtml(detail);
+  else if(detail) html+=sessaoDetailHtml(detail);
+  if(!openForm&&!detail){
+    html+=list.length?list.map(s=>`<div class="list-row" data-open="${s.id}"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span></div></div></div>`).join(''):`<div class="empty">${iconCal()}<p>Nenhuma sessão registrada ainda.</p></div>`;
+  }
+  content.innerHTML=html;
+  const nb=content.querySelector('#newSessaoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='sessao';openDetail=null;render();});
+  content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'sessao',id:r.dataset.open};render();}));
+  attachSessaoFormHandlers(content,detail);
+  attachSessaoDetailHandlers(content,detail);
+}
+function sessaoFormHtml(editing){
+  const s=editing||{};
+  return `<div class="form-panel"><div class="section-title">${editing?'Editar sessão':'Nova sessão'}</div><form id="sessaoForm">
+    <div class="field-row"><div class="field"><label>Data</label><input type="date" name="data" value="${esc(s.data)}"></div><div class="field"><label>Número</label><input name="numero" value="${esc(s.numero)}" placeholder="Ex: 03"></div></div>
+    <div class="field-row"><div class="field"><label>Âncora</label><input name="ancora" value="${esc(s.ancora)}"></div><div class="field"><label>Formato</label><select name="formato">${FORMATOS.map(f=>`<option ${s.formato===f?'selected':''}>${f}</option>`).join('')}</select></div></div>
+    <div class="field"><label>Problemas / tema central</label><textarea name="problema" rows="2">${esc(s.problema)}</textarea></div>
+    <div class="field"><label>Decisões de priorização</label><textarea name="resultado" rows="2">${esc(s.resultado)}</textarea></div>
+    <div class="field"><label>Aprendizados</label><textarea name="aprendizados" rows="2">${esc(s.aprendizados)}</textarea></div>
+    <div class="btn-row"><button type="submit" class="btn" id="saveSessao">Salvar</button><button type="button" class="btn btn-ghost" id="cancelSessao">Cancelar</button></div>
+  </form></div>`;
+}
+function attachSessaoFormHandlers(content,editing){
+  const form=content.querySelector('#sessaoForm'); if(!form) return;
+  content.querySelector('#cancelSessao').addEventListener('click',()=>{openForm=null;render();});
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault(); if(busy)return; busy=true;
+    const b=content.querySelector('#saveSessao'); b.disabled=true;
+    const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
+    const payload={data:d.data||null,numero:d.numero||null,ancora:d.ancora||null,formato:d.formato||null,problema:d.problema||null,resultado:d.resultado||null,aprendizados:d.aprendizados||null};
+    let err;
+    if(editing) err=await updateRow('sessoes',editing.id,payload);
+    else err=(await insertRow('sessoes',payload)).error;
+    busy=false;
+    if(err){toast('Erro ao salvar','err');console.error(err);b.disabled=false;return;}
+    await refreshAll(); openForm=null; render(); toast('Salvo','ok');
+  });
+}
+function sessaoDetailHtml(s){
+  const ligadas=cache.iniciativas.filter(c=>c.sessao_id===s.id);
+  const lig=ligadas.length?ligadas.map(c=>{const col=STATUS_COLOR[c.status];return `<div class="list-row" data-open="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:var(--accent-soft);color:var(--accent)">${esc(s.codigo||'')} · Sessão ${esc(s.numero||'—')}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editSessaoBtn">Editar</button><button class="btn btn-ghost" id="deleteSessaoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeSessaoBtn">Voltar</button></div></div>
+    <div class="detail-grid"><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(s.data)}</div></div><div class="detail-field"><div class="k">Âncora</div><div class="v">${esc(s.ancora)||'—'}</div></div><div class="detail-field"><div class="k">Formato</div><div class="v">${esc(s.formato)||'—'}</div></div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Problemas / tema</div><div class="v">${esc(s.problema)||'—'}</div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Decisões</div><div class="v">${esc(s.resultado)||'—'}</div></div>
+    <div class="detail-field" style="margin-bottom:14px"><div class="k">Aprendizados</div><div class="v">${esc(s.aprendizados)||'—'}</div></div>
+    <div class="divider"></div><div class="section-title">Iniciativas priorizadas nesta sessão</div>${lig}</div>`;
+}
+function attachSessaoDetailHandlers(content,s){
+  if(!s) return;
+  content.querySelector('#closeSessaoBtn').addEventListener('click',()=>{openDetail=null;render();});
+  content.querySelector('#editSessaoBtn').addEventListener('click',()=>{openForm='sessao';render();});
+  content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{currentTab='iniciativas';openDetail={type:'caso',id:r.dataset.open};render();}));
+  content.querySelector('#deleteSessaoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta sessão?'))return; const err=await deleteRow('sessoes',s.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+}
+
+boot();
+</script>
+</body>
+</html>
