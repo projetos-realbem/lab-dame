@@ -165,8 +165,8 @@ footer button:hover{opacity:1;}
    CONFIGURAÇÃO — vem de window.APP_CONFIG, definido em config.js
    (arquivo fora do Git). Ver config.example.js para o modelo.
    ===================================================================== */
-const SUPABASE_URL      = (window.APP_CONFIG && window.APP_CONFIG.SUPABASE_URL)      || '';
-const SUPABASE_ANON_KEY = (window.APP_CONFIG && window.APP_CONFIG.SUPABASE_ANON_KEY) || '';
+const SUPABASE_URL      = 'https://gcdrjkqexfbuenpkvovo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjZHJqa3FleGZidWVucGt2b3ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NzU2MjksImV4cCI6MjA5OTE1MTYyOX0.vDjZxPxjsBEMk-UPEboV3uzE4wpqSvfl-XoaEw5x37Y';
 
 const CONFIGURED = SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.length > 20;
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
