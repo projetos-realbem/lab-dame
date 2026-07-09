@@ -93,6 +93,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body
 .field label{display:block;font-size:12.5px;color:var(--text-muted);margin-bottom:5px;font-weight:500;}
 .field .hint{font-weight:400;color:var(--slate);font-size:11.5px;}
 .field input,.field select,.field textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--font-body);font-size:13.5px;padding:9px 11px;border-radius:7px;resize:vertical;}
+.field input[type="date"]{cursor:pointer;color-scheme:dark;}
+.field input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer;padding:2px;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
@@ -124,6 +126,23 @@ footer button{background:none;border:none;color:var(--text-muted);font-size:11.5
 footer button:hover{opacity:1;}
 
 .loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-muted);font-size:13px;}
+/* Timeline de comentários e histórico */
+.timeline{margin-top:18px;}
+.timeline-title{font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:0 0 12px;}
+.timeline-list{display:flex;flex-direction:column;gap:0;}
+.tl-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.tl-item:last-child{border-bottom:none;}
+.tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+.tl-dot.status{background:var(--amber);}
+.tl-dot.comentario{background:var(--accent);}
+.tl-body{flex:1;min-width:0;}
+.tl-texto{font-size:13.5px;line-height:1.5;margin-bottom:3px;}
+.tl-meta{font-size:11.5px;color:var(--text-muted);}
+.tl-form{display:flex;gap:8px;margin-top:12px;}
+.tl-form input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--font-body);font-size:13px;padding:8px 11px;border-radius:7px;}
+.tl-form input:focus{outline:none;border-color:var(--accent);}
+.tl-form button{flex-shrink:0;}
+.tl-empty{font-size:13px;color:var(--text-muted);padding:8px 0;}
 .mini-bar-wrap{background:var(--surface-2);border-radius:4px;height:6px;overflow:hidden;margin-top:6px;}
 .mini-bar{height:100%;background:var(--accent);border-radius:4px;}
 
@@ -200,7 +219,7 @@ const FORMATOS = ['Priorização semanal','Demo de caso','Exploração de técni
 /* ===================== ESTADO ===================== */
 let session = null;          // sessão Supabase Auth (admin logado)
 let isAdmin = false;         // usuário logado consta em `admins`?
-let cache = { problemas: [], iniciativas: [], sessoes: [] };
+let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [] };
 let currentTab = 'dashboard';
 let filterStatus = 'all';
 let filterProbStatus = 'all';
@@ -225,15 +244,17 @@ function today(){ return new Date().toISOString().slice(0,10); }
 /* ===================== DATA LAYER (Supabase) ===================== */
 async function refreshAll(){
   if(!sb) return;
-  const [pr, ini, ses] = await Promise.all([
+  const [pr, ini, ses, com] = await Promise.all([
     sb.from('problemas').select('*'),
     sb.from('iniciativas').select('*'),
-    sb.from('sessoes').select('*')
+    sb.from('sessoes').select('*'),
+    sb.from('comentarios').select('*').order('criado_em',{ascending:true})
   ]);
   if(pr.error && pr.error.code!=='42501') console.error(pr.error);
   cache.problemas   = pr.data   || [];
   cache.iniciativas = ini.data  || [];
   cache.sessoes     = ses.data  || [];
+  cache.comentarios = com.data  || [];
 }
 
 async function insertProblemaPublic(payload){
@@ -249,9 +270,72 @@ async function updateRow(table, id, patch){
   const { error } = await sb.from(table).update(patch).eq('id', id);
   return error;
 }
+
 async function deleteRow(table, id){
   const { error } = await sb.from(table).delete().eq('id', id);
   return error;
+}
+
+/* ===================== COMENTÁRIOS / HISTÓRICO ===================== */
+async function addComentario(vinculo, texto, tipo='comentario'){
+  // vinculo: { problema_id } | { iniciativa_id } | { sessao_id }
+  const autor = session?.user?.email || 'admin';
+  const { error } = await sb.from('comentarios').insert({ ...vinculo, texto, tipo, autor });
+  if(error) console.error('Erro ao salvar comentário:', error);
+  return error;
+}
+
+async function addStatusLog(vinculo, de, para){
+  const texto = `Status alterado: ${de} → ${para}`;
+  return addComentario(vinculo, texto, 'status');
+}
+
+function fmtTs(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function timelineHtml(comentarios, vinculoKey, vinculoId, inputId){
+  const itens = comentarios.filter(c => c[vinculoKey] === vinculoId)
+    .sort((a,b) => new Date(a.criado_em) - new Date(b.criado_em));
+  const lista = itens.length
+    ? itens.map(c => `
+        <div class="tl-item">
+          <div class="tl-dot ${c.tipo}"></div>
+          <div class="tl-body">
+            <div class="tl-texto">${esc(c.texto)}</div>
+            <div class="tl-meta">${esc(c.autor||'')} · ${fmtTs(c.criado_em)}</div>
+          </div>
+        </div>`).join('')
+    : '<div class="tl-empty">Nenhum comentário ainda.</div>';
+  return `
+    <div class="divider"></div>
+    <div class="timeline">
+      <div class="timeline-title">Comentários e histórico</div>
+      <div class="timeline-list">${lista}</div>
+      <div class="tl-form">
+        <input type="text" id="${inputId}" placeholder="Adicionar comentário…" maxlength="500">
+        <button class="btn" id="${inputId}Btn">Comentar</button>
+      </div>
+    </div>`;
+}
+
+function attachTimelineHandler(content, inputId, vinculo){
+  const inp = content.querySelector('#'+inputId);
+  const btn = content.querySelector('#'+inputId+'Btn');
+  if(!inp||!btn) return;
+  btn.addEventListener('click', async ()=>{
+    const txt = inp.value.trim();
+    if(!txt) return;
+    btn.disabled = true;
+    const err = await addComentario(vinculo, txt);
+    if(err){ toast('Erro ao comentar','err'); btn.disabled=false; return; }
+    inp.value='';
+    await refreshAll();
+    render();
+  });
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter'){ btn.click(); } });
 }
 
 /* ===================== AUTH ===================== */
@@ -520,7 +604,7 @@ function renderProblemasTab(content){
   attachProblemaDetailHandlers(content, detail);
 }
 
-function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span style="color:var(--rose)">*</span> <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}" required>${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
+function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}">${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
 function attachGutLive(form, isPublic){
   if(!form) return;
   const recalc=()=>{
@@ -573,6 +657,7 @@ function problemaDetailHtml(p){
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Impacto estimado</div><div class="v">${esc(p.impacto)||'—'}</div></div>
     <div class="divider"></div>
     ${jaPromovido?`<div class="detail-field"><div class="k">Iniciativa</div><div class="v" style="color:var(--green)">✓ Já promovido para iniciativa</div></div>`:`<div class="btn-row" style="margin-top:0"><button class="btn" id="promoteBtn">${iconRocket()} Priorizar → virar iniciativa</button>${p.status!=='Recusado'?`<button class="btn btn-ghost" id="recusarBtn" style="color:var(--rose)">Recusar</button>`:''}</div><p style="font-size:12px;color:var(--text-muted);margin-top:10px">Use na sessão semanal: os de maior GUT sobem para priorização e viram iniciativas.</p>`}
+    ${timelineHtml(cache.comentarios,'problema_id',p.id,'tlProblema')}
   </div>`;
 }
 function attachProblemaDetailHandlers(content,p){
@@ -580,15 +665,18 @@ function attachProblemaDetailHandlers(content,p){
   content.querySelector('#closeProbBtn').addEventListener('click',()=>{openDetail=null;render();});
   content.querySelector('#editProbBtn').addEventListener('click',()=>{openForm='problema';render();});
   content.querySelector('#deleteProbBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir este problema?'))return; const err=await deleteRow('problemas',p.id); if(err){toast('Erro ao excluir','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
-  const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await refreshAll(); render(); });
+  const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const statusAnt=p.status; const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await addStatusLog({problema_id:p.id},statusAnt,'Recusado'); await refreshAll(); render(); });
   const pr=content.querySelector('#promoteBtn'); if(pr) pr.addEventListener('click', async ()=>{
     const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Priorizado',data:today(),problema:p.descricao||p.titulo,ganho_fin:0,ganho_op:0,custo:0};
     const {data,error}=await insertRow('iniciativas',novo);
     if(error){toast('Erro ao promover','err');console.error(error);return;}
+    const statusAnt = p.status;
     await updateRow('problemas',p.id,{status:'Priorizado'});
+    await addStatusLog({problema_id:p.id}, statusAnt, 'Priorizado');
     await refreshAll();
     currentTab='iniciativas'; openDetail={type:'caso',id:data.id}; openForm=null; render(); toast('Virou iniciativa','ok');
   });
+  attachTimelineHandler(content,'tlProblema',{problema_id:p.id});
 }
 
 /* ===================== INICIATIVAS (admin) ===================== */
@@ -620,7 +708,7 @@ function casoFormHtml(editing){
     <div class="field"><label>Título</label><input name="titulo" required value="${esc(c.titulo)}"></div>
     <div class="field-row"><div class="field"><label>Área</label><input name="area" value="${esc(c.area)}"></div><div class="field"><label>Dono</label><input name="dono" value="${esc(c.dono)}"></div></div>
     <div class="field"><label>Sessão de priorização (opcional)</label><select name="sessao_id"><option value="">— nenhuma —</option>${[...cache.sessoes].sort((a,b)=>(a.data||'').localeCompare(b.data||'')).map(s=>`<option value="${s.id}" ${c.sessao_id===s.id?'selected':''}>${esc(s.codigo||'')} · ${fmtDate(s.data)}${s.ancora?' · '+esc(s.ancora):''}</option>`).join('')}</select></div>
-    <div class="field-row"><div class="field"><label>Status</label><select name="status">${STATUS.map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Data</label><input type="date" name="data" value="${esc(c.data)}"></div></div>
+    <div class="field-row"><div class="field"><label>Status</label><select name="status">${STATUS.map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Data</label><input type="date" name="data" value="${esc(c.data)||today()}"></div></div>
     <div class="field"><label>Problema que resolve</label><input name="problema" value="${esc(c.problema)}"></div>
     <div class="field"><label>Solução implementada</label><textarea name="testado" rows="2">${esc(c.testado)}</textarea></div>
     <div class="divider"></div><div class="section-title">Ganhos e custo</div>
@@ -639,8 +727,13 @@ function attachCasoFormHandlers(content,editing){
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
     const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,sessao_id:d.sessao_id||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:Number(d.ganho_fin)||0,ganho_op:Number(d.ganho_op)||0,custo:Number(d.custo)||0};
     let err;
-    if(editing) err=await updateRow('iniciativas',editing.id,payload);
-    else err=(await insertRow('iniciativas',payload)).error;
+    if(editing){
+      const statusAnt = editing.status;
+      err=await updateRow('iniciativas',editing.id,payload);
+      if(!err && payload.status && payload.status!==statusAnt){
+        await addStatusLog({iniciativa_id:editing.id}, statusAnt, payload.status);
+      }
+    } else err=(await insertRow('iniciativas',payload)).error;
     busy=false;
     if(err){toast('Erro ao salvar','err');console.error(err);b.disabled=false;return;}
     await refreshAll(); openForm=null; render(); toast('Salvo','ok');
@@ -661,6 +754,7 @@ function casoDetailHtml(c){
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Solução implementada</div><div class="v">${esc(c.testado)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Resultado</div><div class="v">${esc(c.resultado)||'—'}</div></div>
     <div class="detail-field"><div class="k">Decisão</div><div class="v">${esc(c.decisao)||'—'}</div></div>
+    ${timelineHtml(cache.comentarios,'iniciativa_id',c.id,'tlIniciativa')}
   </div>`;
 }
 function attachCasoDetailHandlers(content,c){
@@ -670,6 +764,7 @@ function attachCasoDetailHandlers(content,c){
   const gs=content.querySelector('#gotoSessaoBtn'); if(gs) gs.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:c.sessao_id};render();});
   const gp=content.querySelector('#gotoProbBtn'); if(gp) gp.addEventListener('click',(e)=>{e.preventDefault();currentTab='problemas';openDetail={type:'problema',id:c.problema_id};render();});
   content.querySelector('#deleteCasoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta iniciativa?'))return; const err=await deleteRow('iniciativas',c.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+  attachTimelineHandler(content,'tlIniciativa',{iniciativa_id:c.id});
 }
 
 /* ===================== SESSÕES (admin) ===================== */
@@ -723,7 +818,9 @@ function sessaoDetailHtml(s){
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Problemas / tema</div><div class="v">${esc(s.problema)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Decisões</div><div class="v">${esc(s.resultado)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k">Aprendizados</div><div class="v">${esc(s.aprendizados)||'—'}</div></div>
-    <div class="divider"></div><div class="section-title">Iniciativas priorizadas nesta sessão</div>${lig}</div>`;
+    <div class="divider"></div><div class="section-title">Iniciativas priorizadas nesta sessão</div>${lig}
+    ${timelineHtml(cache.comentarios,'sessao_id',s.id,'tlSessao')}
+  </div>`;
 }
 function attachSessaoDetailHandlers(content,s){
   if(!s) return;
@@ -731,6 +828,7 @@ function attachSessaoDetailHandlers(content,s){
   content.querySelector('#editSessaoBtn').addEventListener('click',()=>{openForm='sessao';render();});
   content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{currentTab='iniciativas';openDetail={type:'caso',id:r.dataset.open};render();}));
   content.querySelector('#deleteSessaoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta sessão?'))return; const err=await deleteRow('sessoes',s.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+  attachTimelineHandler(content,'tlSessao',{sessao_id:s.id});
 }
 
 boot();
