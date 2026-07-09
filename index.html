@@ -374,8 +374,8 @@ function renderPublic(){
           <form id="pubForm">
             <div class="field"><label>Título do problema</label><input name="titulo" required placeholder="Ex: Conferência manual de contratos consome muitas horas"></div>
             <div class="field-row">
-              <div class="field"><label>Seu nome</label><input name="solicitante" placeholder="Quem está enviando"></div>
-              <div class="field"><label>Área / setor</label><input name="area" placeholder="Ex: Crédito, Cobrança, Atendimento"></div>
+              <div class="field"><label>Seu nome <span style="color:var(--rose)">*</span></label><input name="solicitante" required placeholder="Quem está enviando"></div>
+              <div class="field"><label>Área / setor <span style="color:var(--rose)">*</span></label><input name="area" required placeholder="Ex: Crédito, Cobrança, Atendimento"></div>
             </div>
             <div class="field"><label>Descreva a dor <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="4" placeholder="Contexto, frequência, quem é afetado e qual o impacto atual"></textarea></div>
             <div class="field"><label>Impacto estimado <span class="hint">— tempo/dinheiro que isso custa, se souber</span></label><input name="impacto" placeholder="Ex: ~10h/semana da equipe, retrabalho constante"></div>
@@ -405,8 +405,8 @@ function renderPublic(){
             <div style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.5">Quanto maior o score, mais alto o problema sobe na fila. Os itens críticos são discutidos primeiro nas sessões.</div>
           </div>
           <div class="info-card" style="border-color:var(--accent);background:var(--accent-soft)">
-            <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:6px">Nome e área são opcionais</div>
-            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5">Você pode enviar sem se identificar — o que importa é a descrição do problema e o impacto estimado.</div>
+            <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:6px">Campos obrigatórios</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5">Título, nome, área e a classificação GUT são obrigatórios. Descrição e impacto estimado são opcionais mas ajudam muito na priorização.</div>
           </div>
         </div>
       </div>
@@ -417,7 +417,7 @@ function renderPublic(){
     e.preventDefault();
     const b=app.querySelector('#pubBtn'); b.disabled=true; b.textContent='Enviando…';
     const fd=new FormData(e.target); const d=Object.fromEntries(fd.entries());
-    const payload={ titulo:d.titulo, solicitante:d.solicitante||null, area:d.area||null, descricao:d.descricao||null, impacto:d.impacto||null, gravidade:gutBuffer.gravidade, urgencia:gutBuffer.urgencia, tendencia:gutBuffer.tendencia, status:'Novo' };
+    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao||null, impacto:d.impacto||null, gravidade:gutBuffer.gravidade, urgencia:gutBuffer.urgencia, tendencia:gutBuffer.tendencia, status:'Novo' };
     const err=await insertProblemaPublic(payload);
     if(err){ toast('Não foi possível enviar. Tente de novo.', 'err'); console.error(err); b.disabled=false; b.textContent='Enviar para a fila'; return; }
     publicView='sent'; render();
