@@ -199,10 +199,9 @@ const STATUS_COLOR = {
   'Descartado':{c:'var(--rose)',bg:'var(--rose-soft)'},
   'Em Pausa':{c:'var(--violet)',bg:'var(--violet-soft)'}
 };
-const PROB_STATUS = ['Novo','Em Análise','Priorizado','Recusado'];
+const PROB_STATUS = ['Novo','Priorizado','Recusado'];
 const PROB_STATUS_COLOR = {
   'Novo':{c:'var(--accent)',bg:'var(--accent-soft)'},
-  'Em Análise':{c:'var(--amber)',bg:'var(--amber-soft)'},
   'Priorizado':{c:'var(--green)',bg:'var(--green-soft)'},
   'Recusado':{c:'var(--rose)',bg:'var(--rose-soft)'}
 };
@@ -554,7 +553,7 @@ function renderDashboard(){
     <div class="hero-card roi"><div class="hero-label">Retorno anualizado</div><div class="hero-value">${roi===null?'—':(roi>=0?'+':'')+Math.round(roi)+'%'}</div><div class="hero-sub">${custoTotal>0?`Sobre ${fmtMoney(custoTotal)} investidos`:'Informe custos nas iniciativas'}</div></div>`;
 
   const funil=`<div class="stat-strip">
-    <div class="stat-pill" style="background:var(--accent-soft);border-color:var(--accent)33"><span class="n" style="color:var(--accent)">${cache.problemas.filter(p=>p.status==='Novo'||p.status==='Em Análise').length}</span><span class="l">Problemas na fila</span></div>
+    <div class="stat-pill" style="background:var(--accent-soft);border-color:var(--accent)33"><span class="n" style="color:var(--accent)">${cache.problemas.filter(p=>p.status==='Novo').length}</span><span class="l">Problemas na fila</span></div>
     ${STATUS.map(s=>{const col=STATUS_COLOR[s];const n=casos.filter(c=>c.status===s).length;return `<div class="stat-pill" style="background:${col.bg};border-color:${col.c}33"><span class="n" style="color:${col.c}">${n}</span><span class="l">${s}</span></div>`;}).join('')}
   </div>`;
 
@@ -593,7 +592,7 @@ function renderProblemasTab(content){
   if(!openForm&&!detail){
     if(list.length){
       html+=`<div class="section-title">Fila priorizada por GUT (maior score no topo)</div>`;
-      html+=list.map((p,i)=>{const score=gutScore(p);const gc=gutColor(score);const sc=PROB_STATUS_COLOR[p.status];return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
+      html+=list.map((p,i)=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
     } else html+=`<div class="empty">${iconInbox()}<p>Nenhum problema nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
@@ -648,13 +647,15 @@ function attachProblemaFormHandlers(content,editing){
   });
 }
 function problemaDetailHtml(p){
-  const score=gutScore(p);const gc=gutColor(score);const sc=PROB_STATUS_COLOR[p.status];
+  const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);
   const jaPromovido=cache.iniciativas.some(c=>c.problema_id===p.id);
+  const ses=p.sessao_id?cache.sessoes.find(x=>x.id===p.sessao_id):null;
   return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editProbBtn">Editar</button><button class="btn btn-ghost" id="deleteProbBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeProbBtn">Voltar</button></div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(p.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(p.titulo)}</div></div>
     <div class="detail-grid"><div class="detail-field"><div class="k">Solicitante</div><div class="v">${esc(p.solicitante)||'—'}</div></div><div class="detail-field"><div class="k">Área</div><div class="v">${esc(p.area)||'—'}</div></div><div class="detail-field"><div class="k">Gravidade</div><div class="v big">${p.gravidade||'—'}</div></div><div class="detail-field"><div class="k">Urgência</div><div class="v big">${p.urgencia||'—'}</div></div><div class="detail-field"><div class="k">Tendência</div><div class="v big">${p.tendencia||'—'}</div></div><div class="detail-field"><div class="k">Score GUT</div><div class="v big" style="color:${gc.c}">${score}</div></div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Descrição</div><div class="v">${esc(p.descricao)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Impacto estimado</div><div class="v">${esc(p.impacto)||'—'}</div></div>
+    ${ses?`<div class="detail-field" style="margin-bottom:12px"><div class="k">Sessão vinculada</div><div class="v"><a href="#" id="gotoSessaoProbBtn" style="color:var(--accent)">${esc(ses.codigo||'')} · ${fmtDate(ses.data)}${ses.ancora?' · '+esc(ses.ancora):''}</a></div></div>`:''}
     <div class="divider"></div>
     ${jaPromovido?`<div class="detail-field"><div class="k">Iniciativa</div><div class="v" style="color:var(--green)">✓ Já promovido para iniciativa</div></div>`:`<div class="btn-row" style="margin-top:0"><button class="btn" id="promoteBtn">${iconRocket()} Priorizar → virar iniciativa</button>${p.status!=='Recusado'?`<button class="btn btn-ghost" id="recusarBtn" style="color:var(--rose)">Recusar</button>`:''}</div><p style="font-size:12px;color:var(--text-muted);margin-top:10px">Use na sessão semanal: os de maior GUT sobem para priorização e viram iniciativas.</p>`}
     ${timelineHtml(cache.comentarios,'problema_id',p.id,'tlProblema')}
@@ -665,6 +666,7 @@ function attachProblemaDetailHandlers(content,p){
   content.querySelector('#closeProbBtn').addEventListener('click',()=>{openDetail=null;render();});
   content.querySelector('#editProbBtn').addEventListener('click',()=>{openForm='problema';render();});
   content.querySelector('#deleteProbBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir este problema?'))return; const err=await deleteRow('problemas',p.id); if(err){toast('Erro ao excluir','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+  const gsp=content.querySelector('#gotoSessaoProbBtn'); if(gsp) gsp.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:p.sessao_id};render();});
   const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const statusAnt=p.status; const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await addStatusLog({problema_id:p.id},statusAnt,'Recusado'); await refreshAll(); render(); });
   const pr=content.querySelector('#promoteBtn'); if(pr) pr.addEventListener('click', async ()=>{
     const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Priorizado',data:today(),problema:p.descricao||p.titulo,ganho_fin:0,ganho_op:0,custo:0};
@@ -783,12 +785,24 @@ function renderSessoesTab(content){
   attachSessaoFormHandlers(content,detail);
   attachSessaoDetailHandlers(content,detail);
 }
+function sessaoFilaCandidatos(editing){
+  const problemas=cache.problemas.filter(p=>p.status==='Novo'||(editing&&p.sessao_id===editing.id))
+    .sort((a,b)=>gutScore(b)-gutScore(a));
+  const iniciativas=cache.iniciativas.filter(c=>c.status==='Priorizado'||(editing&&c.sessao_id===editing.id))
+    .sort((a,b)=>(a.titulo||'').localeCompare(b.titulo||''));
+  return {problemas,iniciativas};
+}
 function sessaoFormHtml(editing){
   const s=editing||{};
+  const {problemas,iniciativas}=sessaoFilaCandidatos(editing);
+  const probHtml=problemas.length?problemas.map(p=>{const score=gutScore(p);const gc=gutColor(score);return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="prob_ids" value="${p.id}" ${p.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(p.codigo||'')}</span><span style="flex:1">${esc(p.titulo)}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c};font-size:10.5px">GUT ${score}</span></label>`;}).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhum problema novo na fila.</div>`;
+  const iniHtml=iniciativas.length?iniciativas.map(c=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="ini_ids" value="${c.id}" ${c.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(c.codigo||'')}</span><span style="flex:1">${esc(c.titulo)}</span></label>`).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhuma iniciativa priorizada aguardando sessão.</div>`;
   return `<div class="form-panel"><div class="section-title">${editing?'Editar sessão':'Nova sessão'}</div><form id="sessaoForm">
     <div class="field-row"><div class="field"><label>Data</label><input type="date" name="data" value="${esc(s.data)||today()}"></div><div class="field"><label>Número</label><input name="numero" value="${esc(s.numero)}" placeholder="Ex: 03"></div></div>
     <div class="field-row"><div class="field"><label>Âncora</label><input name="ancora" value="${esc(s.ancora)}"></div><div class="field"><label>Formato</label><select name="formato">${FORMATOS.map(f=>`<option ${s.formato===f?'selected':''}>${f}</option>`).join('')}</select></div></div>
-    <div class="field"><label>Problemas / tema central</label><textarea name="problema" rows="2">${esc(s.problema)}</textarea></div>
+    <div class="field"><label>Problemas na fila <span class="hint">status Novo</span></label><div class="card" style="max-height:200px;overflow:auto;padding:6px 10px">${probHtml}</div></div>
+    <div class="field"><label>Iniciativas priorizadas <span class="hint">aguardando sessão</span></label><div class="card" style="max-height:200px;overflow:auto;padding:6px 10px">${iniHtml}</div></div>
+    <div class="field"><label>Notas / tema central</label><textarea name="problema" rows="2">${esc(s.problema)}</textarea></div>
     <div class="field"><label>Decisões de priorização</label><textarea name="resultado" rows="2">${esc(s.resultado)}</textarea></div>
     <div class="field"><label>Aprendizados</label><textarea name="aprendizados" rows="2">${esc(s.aprendizados)}</textarea></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveSessao">Salvar</button><button type="button" class="btn btn-ghost" id="cancelSessao">Cancelar</button></div>
@@ -801,24 +815,44 @@ function attachSessaoFormHandlers(content,editing){
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveSessao'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
+    const checkedProbIds=fd.getAll('prob_ids');
+    const checkedIniIds=fd.getAll('ini_ids');
     const payload={data:d.data||null,numero:d.numero||null,ancora:d.ancora||null,formato:d.formato||null,problema:d.problema||null,resultado:d.resultado||null,aprendizados:d.aprendizados||null};
-    let err;
+    let err, sessaoId=editing?editing.id:null;
     if(editing) err=await updateRow('sessoes',editing.id,payload);
-    else err=(await insertRow('sessoes',payload)).error;
+    else { const r=await insertRow('sessoes',payload); err=r.error; sessaoId=r.data?r.data.id:null; }
+    if(err){busy=false;toast('Erro ao salvar','err');console.error(err);b.disabled=false;return;}
+    if(sessaoId){
+      const {problemas,iniciativas}=sessaoFilaCandidatos(editing);
+      for(const p of problemas){
+        const shouldLink=checkedProbIds.includes(String(p.id));
+        const isLinked=p.sessao_id===sessaoId;
+        if(shouldLink&&!isLinked) await updateRow('problemas',p.id,{sessao_id:sessaoId});
+        else if(!shouldLink&&isLinked) await updateRow('problemas',p.id,{sessao_id:null});
+      }
+      for(const c of iniciativas){
+        const shouldLink=checkedIniIds.includes(String(c.id));
+        const isLinked=c.sessao_id===sessaoId;
+        if(shouldLink&&!isLinked) await updateRow('iniciativas',c.id,{sessao_id:sessaoId});
+        else if(!shouldLink&&isLinked) await updateRow('iniciativas',c.id,{sessao_id:null});
+      }
+    }
     busy=false;
-    if(err){toast('Erro ao salvar','err');console.error(err);b.disabled=false;return;}
     await refreshAll(); openForm=null; render(); toast('Salvo','ok');
   });
 }
 function sessaoDetailHtml(s){
   const ligadas=cache.iniciativas.filter(c=>c.sessao_id===s.id);
-  const lig=ligadas.length?ligadas.map(c=>{const col=STATUS_COLOR[c.status];return `<div class="list-row" data-open="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
+  const lig=ligadas.length?ligadas.map(c=>{const col=STATUS_COLOR[c.status];return `<div class="list-row" data-openini="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
+  const problemasLig=cache.problemas.filter(p=>p.sessao_id===s.id);
+  const ligProb=problemasLig.length?problemasLig.map(p=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(p.codigo)} ${esc(p.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhum problema vinculado.</div>`;
   return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:var(--accent-soft);color:var(--accent)">${esc(s.codigo||'')} · Sessão ${esc(s.numero||'—')}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editSessaoBtn">Editar</button><button class="btn btn-ghost" id="deleteSessaoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeSessaoBtn">Voltar</button></div></div>
     <div class="detail-grid"><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(s.data)}</div></div><div class="detail-field"><div class="k">Âncora</div><div class="v">${esc(s.ancora)||'—'}</div></div><div class="detail-field"><div class="k">Formato</div><div class="v">${esc(s.formato)||'—'}</div></div></div>
-    <div class="detail-field" style="margin-bottom:12px"><div class="k">Problemas / tema</div><div class="v">${esc(s.problema)||'—'}</div></div>
+    <div class="detail-field" style="margin-bottom:12px"><div class="k">Notas / tema</div><div class="v">${esc(s.problema)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Decisões</div><div class="v">${esc(s.resultado)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k">Aprendizados</div><div class="v">${esc(s.aprendizados)||'—'}</div></div>
-    <div class="divider"></div><div class="section-title">Iniciativas priorizadas nesta sessão</div>${lig}
+    <div class="divider"></div><div class="section-title">Problemas discutidos nesta sessão</div>${ligProb}
+    <div class="section-title" style="margin-top:16px">Iniciativas priorizadas nesta sessão</div>${lig}
     ${timelineHtml(cache.comentarios,'sessao_id',s.id,'tlSessao')}
   </div>`;
 }
@@ -826,7 +860,8 @@ function attachSessaoDetailHandlers(content,s){
   if(!s) return;
   content.querySelector('#closeSessaoBtn').addEventListener('click',()=>{openDetail=null;render();});
   content.querySelector('#editSessaoBtn').addEventListener('click',()=>{openForm='sessao';render();});
-  content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{currentTab='iniciativas';openDetail={type:'caso',id:r.dataset.open};render();}));
+  content.querySelectorAll('[data-openini]').forEach(r=>r.addEventListener('click',()=>{currentTab='iniciativas';openDetail={type:'caso',id:r.dataset.openini};render();}));
+  content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{currentTab='problemas';openDetail={type:'problema',id:r.dataset.openprob};render();}));
   content.querySelector('#deleteSessaoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta sessão?'))return; const err=await deleteRow('sessoes',s.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
   attachTimelineHandler(content,'tlSessao',{sessao_id:s.id});
 }
