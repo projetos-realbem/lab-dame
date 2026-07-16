@@ -787,9 +787,9 @@ function renderSessoesTab(content){
   attachSessaoDetailHandlers(content,detail);
 }
 function sessaoFilaCandidatos(editing){
-  const problemas=cache.problemas.filter(p=>p.status==='Novo'||(editing&&p.sessao_id===editing.id))
+  const problemas=cache.problemas.filter(p=>(editing&&p.sessao_id===editing.id)||(p.status==='Novo'&&!p.sessao_id))
     .sort((a,b)=>gutScore(b)-gutScore(a));
-  const iniciativas=cache.iniciativas.filter(c=>c.status==='Priorizado'||(editing&&c.sessao_id===editing.id))
+  const iniciativas=cache.iniciativas.filter(c=>(editing&&c.sessao_id===editing.id)||(c.status==='Priorizado'&&!c.sessao_id))
     .sort((a,b)=>(a.titulo||'').localeCompare(b.titulo||''));
   return {problemas,iniciativas};
 }
