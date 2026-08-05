@@ -636,8 +636,8 @@ function renderProblemasTab(content){
   content.querySelectorAll('.filters .chip[data-pf]').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;openForm=null;openDetail=null;render();}));
   const nb=content.querySelector('#newProbBtn'); if(nb) nb.addEventListener('click',()=>{gutBuffer={gravidade:3,urgencia:3,tendencia:3};openForm='problema';openDetail=null;render();});
   content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'problema',id:r.dataset.openprob};render();}));
-  attachProblemaFormHandlers(content, detail);
-  attachProblemaDetailHandlers(content, detail);
+  if(openForm==='problema') attachProblemaFormHandlers(content, detail);
+  else attachProblemaDetailHandlers(content, detail);
 }
 
 function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}">${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
@@ -735,8 +735,8 @@ function renderIniciativasTab(content){
   content.querySelectorAll('.filters .chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;openForm=null;openDetail=null;render();}));
   const nb=content.querySelector('#newCasoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='caso';openDetail=null;render();});
   content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'caso',id:r.dataset.open};render();}));
-  attachCasoFormHandlers(content,detail);
-  attachCasoDetailHandlers(content,detail);
+  if(openForm==='caso') attachCasoFormHandlers(content,detail);
+  else attachCasoDetailHandlers(content,detail);
 }
 function casoFormHtml(editing){
   const c=editing||{};
@@ -745,7 +745,6 @@ function casoFormHtml(editing){
     ${prob?`<div class="field"><label>Problema de origem</label><div class="v" style="font-size:13px;color:var(--accent)">${esc(prob.codigo)} · ${esc(prob.titulo)}</div></div>`:''}
     <div class="field"><label>Título</label><input name="titulo" required value="${esc(c.titulo)}"></div>
     <div class="field-row"><div class="field"><label>Área</label><input name="area" value="${esc(c.area)}"></div><div class="field"><label>Dono</label><input name="dono" value="${esc(c.dono)}"></div></div>
-    <div class="field"><label>Sessão de priorização (opcional)</label><select name="sessao_id"><option value="">— nenhuma —</option>${[...cache.sessoes].sort((a,b)=>(a.data||'').localeCompare(b.data||'')).map(s=>`<option value="${s.id}" ${c.sessao_id===s.id?'selected':''}>${esc(s.codigo||'')} · ${fmtDate(s.data)}${s.ancora?' · '+esc(s.ancora):''}</option>`).join('')}</select></div>
     <div class="field-row"><div class="field"><label>Status</label><select name="status">${STATUS.map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div class="field"><label>Data</label><input type="date" name="data" value="${esc(c.data)||today()}"></div></div>
     <div class="field"><label>Problema que resolve</label><input name="problema" value="${esc(c.problema)}"></div>
     <div class="field"><label>Solução implementada</label><textarea name="testado" rows="2">${esc(c.testado)}</textarea></div>
@@ -764,7 +763,7 @@ function attachCasoFormHandlers(content,editing){
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveCaso'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
-    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,sessao_id:d.sessao_id||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
     let err;
     if(editing){
       const statusAnt = editing.status;
