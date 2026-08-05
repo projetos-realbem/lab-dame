@@ -822,21 +822,22 @@ function renderSessoesTab(content){
   attachSessaoDetailHandlers(content,detail);
 }
 function sessaoFilaCandidatos(editing){
-  const problemas=cache.problemas.filter(p=>(editing&&p.sessao_id===editing.id)||(p.status==='Novo'&&!p.sessao_id))
+  const probOk=st=>normStatus(st)===normStatus('Novo')||normStatus(st)===normStatus('Priorizado');
+  const problemas=cache.problemas.filter(p=>(editing&&p.sessao_id===editing.id)||(probOk(p.status)&&!p.sessao_id))
     .sort((a,b)=>gutScore(b)-gutScore(a));
-  const iniciativas=cache.iniciativas.filter(c=>(editing&&c.sessao_id===editing.id)||(c.status==='Priorizado'&&!c.sessao_id))
+  const iniciativas=cache.iniciativas.filter(c=>(editing&&c.sessao_id===editing.id)||(normStatus(c.status)===normStatus('Priorizado')&&!c.sessao_id))
     .sort((a,b)=>(a.titulo||'').localeCompare(b.titulo||''));
   return {problemas,iniciativas};
 }
 function sessaoFormHtml(editing){
   const s=editing||{};
   const {problemas,iniciativas}=sessaoFilaCandidatos(editing);
-  const probHtml=problemas.length?problemas.map(p=>{const score=gutScore(p);const gc=gutColor(score);return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="prob_ids" value="${p.id}" ${p.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(p.codigo||'')}</span><span style="flex:1">${esc(p.titulo)}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c};font-size:10.5px">GUT ${score}</span></label>`;}).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhum problema novo na fila.</div>`;
+  const probHtml=problemas.length?problemas.map(p=>{const score=gutScore(p);const gc=gutColor(score);return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="prob_ids" value="${p.id}" ${p.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(p.codigo||'')}</span><span style="flex:1">${esc(p.titulo)}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c};font-size:10.5px">GUT ${score}</span></label>`;}).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhum problema disponível na fila.</div>`;
   const iniHtml=iniciativas.length?iniciativas.map(c=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="ini_ids" value="${c.id}" ${c.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(c.codigo||'')}</span><span style="flex:1">${esc(c.titulo)}</span></label>`).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhuma iniciativa priorizada aguardando sessão.</div>`;
   return `<div class="form-panel"><div class="section-title">${editing?'Editar sessão':'Nova sessão'}</div><form id="sessaoForm">
     <div class="field-row"><div class="field"><label>Data</label><input type="date" name="data" value="${esc(s.data)||today()}"></div><div class="field"><label>Número</label><input name="numero" value="${esc(s.numero)}" placeholder="Ex: 03"></div></div>
     <div class="field-row"><div class="field"><label>Âncora</label><input name="ancora" value="${esc(s.ancora)}"></div><div class="field"><label>Formato</label><select name="formato">${FORMATOS.map(f=>`<option ${s.formato===f?'selected':''}>${f}</option>`).join('')}</select></div></div>
-    <div class="field"><label>Problemas na fila <span class="hint">status Novo</span></label><div class="card" style="max-height:200px;overflow:auto;padding:6px 10px">${probHtml}</div></div>
+    <div class="field"><label>Problemas na fila <span class="hint">status Novo ou Priorizado</span></label><div class="card" style="max-height:200px;overflow:auto;padding:6px 10px">${probHtml}</div></div>
     <div class="field"><label>Iniciativas priorizadas <span class="hint">aguardando sessão</span></label><div class="card" style="max-height:200px;overflow:auto;padding:6px 10px">${iniHtml}</div></div>
     <div class="field"><label>Notas / tema central</label><textarea name="problema" rows="2">${esc(s.problema)}</textarea></div>
     <div class="field"><label>Decisões de priorização</label><textarea name="resultado" rows="2">${esc(s.resultado)}</textarea></div>
