@@ -234,8 +234,8 @@ let session = null;          // sessão Supabase Auth (admin logado)
 let isAdmin = false;         // usuário logado consta em `admins`?
 let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [] };
 let currentTab = 'dashboard';
-let filterStatus = 'all';
-let filterProbStatus = 'all';
+let filterStatus = 'Priorizado';
+let filterProbStatus = 'Novo';
 let openForm = null;
 let openDetail = null;
 let gutBuffer = {gravidade:3, urgencia:3, tendencia:3};
@@ -621,7 +621,7 @@ function renderProblemasTab(content){
   if(filterProbStatus!=='all') list=list.filter(p=>normStatus(p.status)===normStatus(filterProbStatus));
   list=[...list].sort((a,b)=>gutScore(b)-gutScore(a)||(new Date(b.criado_em)-new Date(a.criado_em)));
 
-  let html=`<div class="top-actions"><div class="filters"><div class="chip ${filterProbStatus==='all'?'active':''}" data-pf="all">Todos</div>${PROB_STATUS.map(s=>`<div class="chip ${filterProbStatus===s?'active':''}" data-pf="${s}">${s}</div>`).join('')}</div><button class="btn" id="newProbBtn">+ Novo problema</button></div>`;
+  let html=`<div class="top-actions"><div class="filters">${PROB_STATUS.map(s=>`<div class="chip ${filterProbStatus===s?'active':''}" data-pf="${s}">${s}</div>`).join('')}</div><button class="btn" id="newProbBtn">+ Novo problema</button></div>`;
 
   if(openForm==='problema') html+=problemaFormHtml(detail);
   else if(detail) html+=problemaDetailHtml(detail);
@@ -724,7 +724,7 @@ function renderIniciativasTab(content){
   list=[...list].sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em));
   const detail=openDetail&&openDetail.type==='caso'?cache.iniciativas.find(c=>c.id===openDetail.id):null;
 
-  let html=`<div class="top-actions"><div class="filters"><div class="chip ${filterStatus==='all'?'active':''}" data-f="all">Todas</div>${STATUS.map(s=>`<div class="chip ${filterStatus===s?'active':''}" data-f="${s}">${s}</div>`).join('')}</div><button class="btn" id="newCasoBtn">+ Nova iniciativa</button></div>`;
+  let html=`<div class="top-actions"><div class="filters">${STATUS.map(s=>`<div class="chip ${filterStatus===s?'active':''}" data-f="${s}">${s}</div>`).join('')}</div><button class="btn" id="newCasoBtn">+ Nova iniciativa</button></div>`;
   if(openForm==='caso') html+=casoFormHtml(detail);
   else if(detail) html+=casoDetailHtml(detail);
 
