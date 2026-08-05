@@ -633,7 +633,7 @@ function renderProblemasTab(content){
     } else html+=`<div class="empty">${iconInbox()}<p>Nenhum problema nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
-  content.querySelectorAll('.filters .chip[data-pf]').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;render();}));
+  content.querySelectorAll('.filters .chip[data-pf]').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;openForm=null;openDetail=null;render();}));
   const nb=content.querySelector('#newProbBtn'); if(nb) nb.addEventListener('click',()=>{gutBuffer={gravidade:3,urgencia:3,tendencia:3};openForm='problema';openDetail=null;render();});
   content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'problema',id:r.dataset.openprob};render();}));
   attachProblemaFormHandlers(content, detail);
@@ -732,7 +732,7 @@ function renderIniciativasTab(content){
     html+=list.length?list.map(c=>{const col=iniColor(c.status);const tg=(Number(c.ganho_fin)||0)>0||(Number(c.ganho_op)||0)>0;return `<div class="list-row" data-open="${c.id}"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(c.codigo||'')}</span>${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><span>${esc(c.area||'—')}</span><span>${esc(c.dono||'—')}</span>${tg?`<span style="color:var(--green);font-family:var(--font-mono)">${(Number(c.ganho_fin)||0)>0?fmtMoney(c.ganho_fin)+'/mês':''}${(Number(c.ganho_fin)||0)>0&&(Number(c.ganho_op)||0)>0?' · ':''}${(Number(c.ganho_op)||0)>0?fmtHoras(c.ganho_op)+'/mês':''}</span>`:''}</div></div></div>`;}).join(''):`<div class="empty">${iconRocket()}<p>Nenhuma iniciativa nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
-  content.querySelectorAll('.filters .chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;render();}));
+  content.querySelectorAll('.filters .chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;openForm=null;openDetail=null;render();}));
   const nb=content.querySelector('#newCasoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='caso';openDetail=null;render();});
   content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'caso',id:r.dataset.open};render();}));
   attachCasoFormHandlers(content,detail);
