@@ -215,11 +215,13 @@ const PROB_STATUS_COLOR = {
 };
 const BUCKETS = ['Tempo economizado','Custo reduzido','Solução construída internamente','Qualidade de entrega','Velocidade de decisão','Redução de risco ou inadimplência','Geração de receita ou conversão'];
 function parseImpacto(v){ return (v||'').split(/\s*[;,|]\s*/).map(s=>s.trim()).filter(Boolean); }
-function impactoChecksHtml(selectedRaw){
+function impactoChecksHtml(selectedRaw, fieldName){
+  const name=fieldName||'impacto';
   const sel=parseImpacto(selectedRaw);
-  return `<div class="impact-grid">${BUCKETS.map(b=>`<label class="impact-opt"><input type="checkbox" name="impacto" value="${esc(b)}" ${sel.includes(b)?'checked':''}><span>${esc(b)}</span></label>`).join('')}</div>`;
+  return `<div class="impact-grid">${BUCKETS.map(b=>`<label class="impact-opt"><input type="checkbox" name="${name}" value="${esc(b)}" ${sel.includes(b)?'checked':''}><span>${esc(b)}</span></label>`).join('')}</div>`;
 }
-function collectImpacto(form){ return Array.from(form.querySelectorAll('input[name="impacto"]:checked')).map(c=>c.value).join(', '); }
+function collectChecks(form, name){ return Array.from(form.querySelectorAll('input[name="'+name+'"]:checked')).map(c=>c.value).join(', '); }
+function collectImpacto(form){ return collectChecks(form,'impacto'); }
 const GUT_LABELS = {
   gravidade:{titulo:'Gravidade',hint:'Impacto se nada for feito',opcoes:[[1,'1 · Sem gravidade'],[2,'2 · Pouco grave'],[3,'3 · Grave'],[4,'4 · Muito grave'],[5,'5 · Extremamente grave']]},
   urgencia:{titulo:'Urgência',hint:'Prazo para agir',opcoes:[[1,'1 · Pode esperar'],[2,'2 · Pouco urgente'],[3,'3 · Urgente, prazo médio'],[4,'4 · Muito urgente'],[5,'5 · Ação imediata']]},
@@ -595,7 +597,7 @@ function renderDashboard(){
   </div>`;
 
   const bucketsHtml=BUCKETS.map(b=>{
-    const cb=casos.filter(c=>c.bucket===b&&(isImplementado(c)||isEmImplementacao(c)));
+    const cb=casos.filter(c=>parseImpacto(c.bucket).includes(b)&&(isImplementado(c)||isEmImplementacao(c)));
     const ex=cb.slice(0,2).map(c=>`<div>${esc(c.codigo||'')} ${esc(c.titulo)}${c.resultado?' — '+esc(c.resultado):''}</div>`).join('');
     return `<div class="bucket-card"><div class="num">${cb.length}</div><div class="label">${b}</div>${ex?`<div class="examples">${ex}</div>`:''}</div>`;
   }).join('');
@@ -750,7 +752,8 @@ function casoFormHtml(editing){
     <div class="field"><label>Solução implementada</label><textarea name="testado" rows="2">${esc(c.testado)}</textarea></div>
     <div class="divider"></div><div class="section-title">Ganhos e custo</div>
     <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="text" inputmode="decimal" data-mask="money" name="ganho_fin" value="${esc(c.ganho_fin!=null?fmtNum(c.ganho_fin,2):'')}" placeholder="0,00"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="text" inputmode="numeric" data-mask="int" name="ganho_op" value="${esc(c.ganho_op!=null?fmtNum(c.ganho_op,0):'')}" placeholder="0"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="text" inputmode="decimal" data-mask="money" name="custo" value="${esc(c.custo!=null?fmtNum(c.custo,2):'')}" placeholder="0,00"></div></div>
-    <div class="field-row"><div class="field"><label>Categoria de impacto</label><select name="bucket"><option value="">Selecionar...</option>${BUCKETS.map(b=>`<option ${c.bucket===b?'selected':''}>${b}</option>`).join('')}</select></div><div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div></div>
+    <div class="field"><label>Categoria de impacto <span class="hint">— selecione uma ou mais</span></label>${impactoChecksHtml(c.bucket,'bucket')}</div>
+    <div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div>
     <div class="field"><label>Decisão final</label><input name="decisao" value="${esc(c.decisao)}"></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveCaso">Salvar</button><button type="button" class="btn btn-ghost" id="cancelCaso">Cancelar</button></div>
   </form></div>`;
@@ -763,7 +766,7 @@ function attachCasoFormHandlers(content,editing){
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveCaso'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
-    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:collectChecks(form,'bucket')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
     let err;
     if(editing){
       const statusAnt = editing.status;
