@@ -898,7 +898,23 @@ function attachSessaoDetailHandlers(content,s){
   content.querySelector('#editSessaoBtn').addEventListener('click',()=>{openForm='sessao';render();});
   content.querySelectorAll('[data-openini]').forEach(r=>r.addEventListener('click',()=>{currentTab='iniciativas';openDetail={type:'caso',id:r.dataset.openini};render();}));
   content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{currentTab='problemas';openDetail={type:'problema',id:r.dataset.openprob};render();}));
-  content.querySelector('#deleteSessaoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta sessão?'))return; const err=await deleteRow('sessoes',s.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
+  content.querySelector('#deleteSessaoBtn').addEventListener('click', async ()=>{
+    const probsLig=cache.problemas.filter(p=>p.sessao_id===s.id);
+    const inisLig=cache.iniciativas.filter(c=>c.sessao_id===s.id);
+    const aviso=(probsLig.length||inisLig.length)
+      ? `Excluir esta sessão?\n\n${probsLig.length} problema(s) voltarão para "Novo" e ${inisLig.length} iniciativa(s) serão desvinculadas.`
+      : 'Excluir esta sessão?';
+    if(!confirm(aviso))return;
+    // desvincular e resetar antes de apagar (garante o comportamento independente da FK)
+    for(const p of probsLig){
+      const jaPromovido=cache.iniciativas.some(c=>c.problema_id===p.id);
+      const patch=jaPromovido?{sessao_id:null}:{sessao_id:null,status:'Novo'};
+      const e=await updateRow('problemas',p.id,patch); if(e){toast('Erro ao desvincular problema','err');console.error(e);return;}
+    }
+    for(const c of inisLig){ const e=await updateRow('iniciativas',c.id,{sessao_id:null}); if(e){toast('Erro ao desvincular iniciativa','err');console.error(e);return;} }
+    const err=await deleteRow('sessoes',s.id); if(err){toast('Erro','err');console.error(err);return;}
+    await refreshAll(); openDetail=null; render(); toast('Sessão excluída · itens liberados','ok');
+  });
   attachTimelineHandler(content,'tlSessao',{sessao_id:s.id});
 }
 
