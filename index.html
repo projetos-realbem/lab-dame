@@ -94,6 +94,11 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body
 .field .hint{font-weight:400;color:var(--slate);font-size:11.5px;}
 .field input,.field select,.field textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--font-body);font-size:13.5px;padding:9px 11px;border-radius:7px;resize:vertical;}
 .field input[type="checkbox"]{width:15px;height:15px;flex:none;padding:0;border-radius:3px;accent-color:var(--accent);}
+.impact-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:7px 14px;}
+.impact-opt{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 9px;background:var(--surface);border:1px solid var(--border);border-radius:7px;cursor:pointer;}
+.impact-opt:hover{border-color:var(--accent);}
+.impact-opt span{flex:1;}
+.impact-opt input{margin:0;}
 .field input[type="date"]{cursor:pointer;color-scheme:dark;}
 .field input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer;padding:2px;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
@@ -200,13 +205,21 @@ const STATUS_COLOR = {
   'Descartado':{c:'var(--rose)',bg:'var(--rose-soft)'},
   'Em Pausa':{c:'var(--violet)',bg:'var(--violet-soft)'}
 };
+function iniColor(status){ return STATUS_COLOR[status] || STATUS_COLOR[(STATUS.find(s=>normStatus(s)===normStatus(status)))] || {c:'var(--slate)',bg:'var(--slate-soft)'}; }
 const PROB_STATUS = ['Novo','Priorizado','Recusado'];
+function normStatus(s){ return (s==null?'':String(s)).trim().toLowerCase(); }
 const PROB_STATUS_COLOR = {
   'Novo':{c:'var(--accent)',bg:'var(--accent-soft)'},
   'Priorizado':{c:'var(--green)',bg:'var(--green-soft)'},
   'Recusado':{c:'var(--rose)',bg:'var(--rose-soft)'}
 };
 const BUCKETS = ['Tempo economizado','Custo reduzido','Solução construída internamente','Qualidade de entrega','Velocidade de decisão','Redução de risco ou inadimplência','Geração de receita ou conversão'];
+function parseImpacto(v){ return (v||'').split(/\s*[;,|]\s*/).map(s=>s.trim()).filter(Boolean); }
+function impactoChecksHtml(selectedRaw){
+  const sel=parseImpacto(selectedRaw);
+  return `<div class="impact-grid">${BUCKETS.map(b=>`<label class="impact-opt"><input type="checkbox" name="impacto" value="${esc(b)}" ${sel.includes(b)?'checked':''}><span>${esc(b)}</span></label>`).join('')}</div>`;
+}
+function collectImpacto(form){ return Array.from(form.querySelectorAll('input[name="impacto"]:checked')).map(c=>c.value).join(', '); }
 const GUT_LABELS = {
   gravidade:{titulo:'Gravidade',hint:'Impacto se nada for feito',opcoes:[[1,'1 · Sem gravidade'],[2,'2 · Pouco grave'],[3,'3 · Grave'],[4,'4 · Muito grave'],[5,'5 · Extremamente grave']]},
   urgencia:{titulo:'Urgência',hint:'Prazo para agir',opcoes:[[1,'1 · Pode esperar'],[2,'2 · Pouco urgente'],[3,'3 · Urgente, prazo médio'],[4,'4 · Muito urgente'],[5,'5 · Ação imediata']]},
@@ -234,6 +247,25 @@ function esc(s){ if(s===undefined||s===null)return''; return String(s).replace(/
 function fmtDate(d){ if(!d)return'—'; const [y,m,day]=String(d).split('-'); return day&&m&&y?`${day}/${m}/${y}`:d; }
 function fmtMoney(n){ return 'R$ '+(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function fmtHoras(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'h'; }
+/* ---- máscara de valores (pt-BR) ---- */
+function parseNum(v){ if(v==null) return 0; let s=String(v).replace(/[^\d.,-]/g,'').trim(); if(!s) return 0; if(s.includes(',')){ s=s.replace(/\./g,'').replace(',','.'); } const n=parseFloat(s); return isNaN(n)?0:n; }
+function fmtNum(n,dec){ return (Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:dec||0,maximumFractionDigits:dec===undefined?2:dec}); }
+function maskMoneyInput(el){
+  let digits=el.value.replace(/\D/g,'');
+  if(!digits){ el.value=''; return; }
+  digits=digits.replace(/^0+(?=\d)/,'');
+  const cents=digits.padStart(3,'0');
+  const int=cents.slice(0,-2), frac=cents.slice(-2);
+  el.value=Number(int).toLocaleString('pt-BR')+','+frac;
+}
+function maskIntInput(el){
+  let digits=el.value.replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+  el.value=digits?Number(digits).toLocaleString('pt-BR'):'';
+}
+function attachMasks(form){
+  form.querySelectorAll('[data-mask="money"]').forEach(el=>{ maskMoneyInput(el); el.addEventListener('input',()=>maskMoneyInput(el)); });
+  form.querySelectorAll('[data-mask="int"]').forEach(el=>{ maskIntInput(el); el.addEventListener('input',()=>maskIntInput(el)); });
+}
 function toast(msg, kind){
   const root=document.getElementById('toast-root');
   root.innerHTML=`<div class="toast ${kind||''}">${esc(msg)}</div>`;
@@ -462,7 +494,7 @@ function renderPublic(){
               <div class="field"><label>Área / setor <span style="color:var(--rose)">*</span></label><input name="area" required placeholder="Ex: Crédito, Cobrança, Atendimento"></div>
             </div>
             <div class="field"><label>Descreva a dor <span style="color:var(--rose)">*</span> <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="4" required placeholder="Contexto, frequência, quem é afetado e qual o impacto atual"></textarea></div>
-            <div class="field"><label>Impacto estimado <span style="color:var(--rose)">*</span> <span class="hint">— tempo/dinheiro que isso custa, se souber</span></label><input name="impacto" required placeholder="Ex: ~10h/semana da equipe, retrabalho constante"></div>
+            <div class="field"><label>Impacto estimado <span style="color:var(--rose)">*</span> <span class="hint">— selecione os ganhos esperados</span></label>${impactoChecksHtml('')}</div>
             <div class="gut-block">
               <div class="gut-head"><span class="gut-title">Matriz GUT — classifique seu problema</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div>
               <div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div>
@@ -501,7 +533,9 @@ function renderPublic(){
     e.preventDefault();
     const b=app.querySelector('#pubBtn'); b.disabled=true; b.textContent='Enviando…';
     const fd=new FormData(e.target); const d=Object.fromEntries(fd.entries());
-    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao, impacto:d.impacto, gravidade:gutBuffer.gravidade, urgencia:gutBuffer.urgencia, tendencia:gutBuffer.tendencia, status:'Novo' };
+    const impacto=collectImpacto(e.target);
+    if(!impacto){ toast('Selecione ao menos um impacto estimado.','err'); b.disabled=false; b.textContent='Enviar para a fila'; return; }
+    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao, impacto:impacto, gravidade:gutBuffer.gravidade, urgencia:gutBuffer.urgencia, tendencia:gutBuffer.tendencia, status:'Novo' };
     const err=await insertProblemaPublic(payload);
     if(err){ toast('Não foi possível enviar. Tente de novo.', 'err'); console.error(err); b.disabled=false; b.textContent='Enviar para a fila'; return; }
     publicView='sent'; render();
@@ -540,16 +574,18 @@ function renderAdminApp(){
 /* ===================== DASHBOARD ===================== */
 function renderDashboard(){
   const casos=cache.iniciativas;
-  const implementadas=casos.filter(c=>c.status==='Implementado');
-  const emAndamento=casos.filter(c=>c.status==='Em Implementação');
-  const ganhoFin=implementadas.reduce((s,c)=>s+(Number(c.ganho_fin)||0),0);
-  const ganhoOp=implementadas.reduce((s,c)=>s+(Number(c.ganho_op)||0),0);
-  const custoTotal=implementadas.reduce((s,c)=>s+(Number(c.custo)||0),0);
+  const isImplementado=c=>normStatus(c.status)===normStatus('Implementado');
+  const isEmImplementacao=c=>normStatus(c.status)===normStatus('Em Implementação');
+  const implementadas=casos.filter(isImplementado);
+  const emAndamento=casos.filter(isEmImplementacao);
+  const ativas=casos.filter(c=>isImplementado(c)||isEmImplementacao(c));
+  const ganhoFin=ativas.reduce((s,c)=>s+(Number(c.ganho_fin)||0),0);
+  const ganhoOp=ativas.reduce((s,c)=>s+(Number(c.ganho_op)||0),0);
+  const custoTotal=ativas.reduce((s,c)=>s+(Number(c.custo)||0),0);
   const roi=custoTotal>0?((ganhoFin*12-custoTotal)/custoTotal*100):null;
-  const potencialFin=emAndamento.reduce((s,c)=>s+(Number(c.ganho_fin)||0),0);
 
   const heroHtml=`
-    <div class="hero-card fin"><div class="hero-label">Ganho financeiro / mês</div><div class="hero-value">${fmtMoney(ganhoFin)}</div><div class="hero-sub">${implementadas.length} iniciativa(s) implementada(s)${potencialFin?` · +${fmtMoney(potencialFin)} em andamento`:''}</div></div>
+    <div class="hero-card fin"><div class="hero-label">Ganho financeiro / mês</div><div class="hero-value">${fmtMoney(ganhoFin)}</div><div class="hero-sub">${ativas.length} iniciativa(s) ativa(s) · ${implementadas.length} implementada(s), ${emAndamento.length} em andamento</div></div>
     <div class="hero-card op"><div class="hero-label">Ganho operacional / mês</div><div class="hero-value">${fmtHoras(ganhoOp)}</div><div class="hero-sub">Horas economizadas por mês</div></div>
     <div class="hero-card roi"><div class="hero-label">Retorno anualizado</div><div class="hero-value">${roi===null?'—':(roi>=0?'+':'')+Math.round(roi)+'%'}</div><div class="hero-sub">${custoTotal>0?`Sobre ${fmtMoney(custoTotal)} investidos`:'Informe custos nas iniciativas'}</div></div>`;
 
@@ -559,14 +595,14 @@ function renderDashboard(){
   </div>`;
 
   const bucketsHtml=BUCKETS.map(b=>{
-    const cb=casos.filter(c=>c.bucket===b&&c.status==='Implementado');
+    const cb=casos.filter(c=>c.bucket===b&&(isImplementado(c)||isEmImplementacao(c)));
     const ex=cb.slice(0,2).map(c=>`<div>${esc(c.codigo||'')} ${esc(c.titulo)}${c.resultado?' — '+esc(c.resultado):''}</div>`).join('');
     return `<div class="bucket-card"><div class="num">${cb.length}</div><div class="label">${b}</div>${ex?`<div class="examples">${ex}</div>`:''}</div>`;
   }).join('');
 
-  const ranked=[...casos].filter(c=>c.status==='Implementado'||c.status==='Em Implementação').sort((a,b)=>(Number(b.ganho_fin)||0)-(Number(a.ganho_fin)||0)).slice(0,6);
+  const ranked=[...casos].filter(c=>isImplementado(c)||isEmImplementacao(c)).sort((a,b)=>(Number(b.ganho_fin)||0)-(Number(a.ganho_fin)||0)).slice(0,6);
   const maxFin=ranked.length?Math.max(...ranked.map(c=>Number(c.ganho_fin)||0),1):1;
-  const rankHtml=ranked.length?ranked.map(c=>{const col=STATUS_COLOR[c.status];const w=Math.max(4,(Number(c.ganho_fin)||0)/maxFin*100);return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.codigo||'')} ${esc(c.titulo)}</span><span style="font-family:var(--font-mono);color:var(--green);white-space:nowrap">${fmtMoney(c.ganho_fin)}/mês</span></div><div class="mini-bar-wrap"><div class="mini-bar" style="width:${w}%;background:${col.c}"></div></div></div>`;}).join(''):`<div class="empty"><p>Nenhuma iniciativa com ganho registrado ainda.</p></div>`;
+  const rankHtml=ranked.length?ranked.map(c=>{const col=iniColor(c.status);const w=Math.max(4,(Number(c.ganho_fin)||0)/maxFin*100);return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.codigo||'')} ${esc(c.titulo)}</span><span style="font-family:var(--font-mono);color:var(--green);white-space:nowrap">${fmtMoney(c.ganho_fin)}/mês</span></div><div class="mini-bar-wrap"><div class="mini-bar" style="width:${w}%;background:${col.c}"></div></div></div>`;}).join(''):`<div class="empty"><p>Nenhuma iniciativa com ganho registrado ainda.</p></div>`;
 
   const recent=[...cache.sessoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).slice(0,3);
   const sessoesHtml=recent.length?recent.map(s=>`<div class="list-row" style="cursor:default"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span></div></div></div>`).join(''):`<div class="empty"><p>Nenhuma sessão registrada ainda.</p></div>`;
@@ -574,7 +610,7 @@ function renderDashboard(){
   return `<div class="section-title">Ganhos consolidados</div><div class="hero-grid">${heroHtml}</div>
     <div class="section-title">Funil de iniciativas</div>${funil}
     <div class="section-title" style="margin-top:22px">Top iniciativas por ganho financeiro</div><div class="card" style="margin-bottom:24px">${rankHtml}</div>
-    <div class="section-title">Impacto por categoria (implementadas)</div><div class="bucket-grid">${bucketsHtml}</div>
+    <div class="section-title">Impacto por categoria (implementadas e em andamento)</div><div class="bucket-grid">${bucketsHtml}</div>
     <div class="section-title">Últimas sessões</div><div class="card">${sessoesHtml}</div>`;
 }
 
@@ -582,7 +618,7 @@ function renderDashboard(){
 function renderProblemasTab(content){
   const detail = openDetail&&openDetail.type==='problema' ? cache.problemas.find(p=>p.id===openDetail.id) : null;
   let list=cache.problemas;
-  if(filterProbStatus!=='all') list=list.filter(p=>p.status===filterProbStatus);
+  if(filterProbStatus!=='all') list=list.filter(p=>normStatus(p.status)===normStatus(filterProbStatus));
   list=[...list].sort((a,b)=>gutScore(b)-gutScore(a)||(new Date(b.criado_em)-new Date(a.criado_em)));
 
   let html=`<div class="top-actions"><div class="filters"><div class="chip ${filterProbStatus==='all'?'active':''}" data-pf="all">Todos</div>${PROB_STATUS.map(s=>`<div class="chip ${filterProbStatus===s?'active':''}" data-pf="${s}">${s}</div>`).join('')}</div><button class="btn" id="newProbBtn">+ Novo problema</button></div>`;
@@ -597,7 +633,7 @@ function renderProblemasTab(content){
     } else html+=`<div class="empty">${iconInbox()}<p>Nenhum problema nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
-  content.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;render();}));
+  content.querySelectorAll('.filters .chip[data-pf]').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;render();}));
   const nb=content.querySelector('#newProbBtn'); if(nb) nb.addEventListener('click',()=>{gutBuffer={gravidade:3,urgencia:3,tendencia:3};openForm='problema';openDetail=null;render();});
   content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'problema',id:r.dataset.openprob};render();}));
   attachProblemaFormHandlers(content, detail);
@@ -624,7 +660,7 @@ function problemaFormHtml(editing){
     <div class="field"><label>Título</label><input name="titulo" required value="${esc(p.titulo)}"></div>
     <div class="field-row"><div class="field"><label>Solicitante</label><input name="solicitante" value="${esc(p.solicitante)}"></div><div class="field"><label>Área</label><input name="area" value="${esc(p.area)}"></div></div>
     <div class="field"><label>Descrição da dor</label><textarea name="descricao" rows="3">${esc(p.descricao)}</textarea></div>
-    <div class="field"><label>Impacto estimado</label><input name="impacto" value="${esc(p.impacto)}"></div>
+    <div class="field"><label>Impacto estimado</label>${impactoChecksHtml(p.impacto)}</div>
     <div class="gut-block"><div class="gut-head"><span class="gut-title">Matriz GUT</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div></div>
     ${editing?`<div class="field"><label>Status</label><select name="status">${PROB_STATUS.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
     <div class="btn-row"><button type="submit" class="btn" id="saveProb">Salvar</button><button type="button" class="btn btn-ghost" id="cancelProb">Cancelar</button></div>
@@ -638,7 +674,7 @@ function attachProblemaFormHandlers(content,editing){
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveProb'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
-    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:d.impacto||null,gravidade:gutBuffer.gravidade,urgencia:gutBuffer.urgencia,tendencia:gutBuffer.tendencia};
+    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:collectImpacto(form)||null,gravidade:gutBuffer.gravidade,urgencia:gutBuffer.urgencia,tendencia:gutBuffer.tendencia};
     let err;
     if(editing){ payload.status=d.status; err=await updateRow('problemas',editing.id,payload); }
     else { payload.status='Novo'; err=(await insertRow('problemas',payload)).error; }
@@ -651,14 +687,14 @@ function problemaDetailHtml(p){
   const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);
   const jaPromovido=cache.iniciativas.some(c=>c.problema_id===p.id);
   const ses=p.sessao_id?cache.sessoes.find(x=>x.id===p.sessao_id):null;
-  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editProbBtn">Editar</button><button class="btn btn-ghost" id="deleteProbBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeProbBtn">Voltar</button></div></div>
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editProbBtn">Editar</button><button class="btn btn-ghost" id="closeProbBtn">Voltar</button></div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(p.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(p.titulo)}</div></div>
     <div class="detail-grid"><div class="detail-field"><div class="k">Solicitante</div><div class="v">${esc(p.solicitante)||'—'}</div></div><div class="detail-field"><div class="k">Área</div><div class="v">${esc(p.area)||'—'}</div></div><div class="detail-field"><div class="k">Gravidade</div><div class="v big">${p.gravidade||'—'}</div></div><div class="detail-field"><div class="k">Urgência</div><div class="v big">${p.urgencia||'—'}</div></div><div class="detail-field"><div class="k">Tendência</div><div class="v big">${p.tendencia||'—'}</div></div><div class="detail-field"><div class="k">Score GUT</div><div class="v big" style="color:${gc.c}">${score}</div></div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Descrição</div><div class="v">${esc(p.descricao)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Impacto estimado</div><div class="v">${esc(p.impacto)||'—'}</div></div>
     ${ses?`<div class="detail-field" style="margin-bottom:12px"><div class="k">Sessão vinculada</div><div class="v"><a href="#" id="gotoSessaoProbBtn" style="color:var(--accent)">${esc(ses.codigo||'')} · ${fmtDate(ses.data)}${ses.ancora?' · '+esc(ses.ancora):''}</a></div></div>`:''}
     <div class="divider"></div>
-    ${jaPromovido?`<div class="detail-field"><div class="k">Iniciativa</div><div class="v" style="color:var(--green)">✓ Já promovido para iniciativa</div></div>`:`<div class="btn-row" style="margin-top:0"><button class="btn" id="promoteBtn">${iconRocket()} Priorizar → virar iniciativa</button>${p.status!=='Recusado'?`<button class="btn btn-ghost" id="recusarBtn" style="color:var(--rose)">Recusar</button>`:''}</div><p style="font-size:12px;color:var(--text-muted);margin-top:10px">Use na sessão semanal: os de maior GUT sobem para priorização e viram iniciativas.</p>`}
+    ${jaPromovido?`<div class="detail-field"><div class="k">Iniciativa</div><div class="v" style="color:var(--green)">✓ Já promovido para iniciativa</div></div>`:(ses?`<div class="btn-row" style="margin-top:0"><button class="btn" id="promoteBtn">${iconRocket()} Priorizar → virar iniciativa</button>${p.status!=='Recusado'?`<button class="btn btn-ghost" id="recusarBtn" style="color:var(--rose)">Recusar</button>`:''}</div><p style="font-size:12px;color:var(--text-muted);margin-top:10px">Decisão da sessão: os de maior GUT sobem para priorização e viram iniciativas; os demais podem ser recusados.</p>`:`<div class="detail-field"><div class="k">Priorização / Recusa</div><div class="v" style="color:var(--text-muted);font-size:13px">Disponível somente após o problema ser analisado em uma sessão. Vincule-o a uma sessão na aba <strong>Sessões</strong> para decidir.</div></div>`)}
     ${timelineHtml(cache.comentarios,'problema_id',p.id,'tlProblema')}
   </div>`;
 }
@@ -666,7 +702,6 @@ function attachProblemaDetailHandlers(content,p){
   if(!p) return;
   content.querySelector('#closeProbBtn').addEventListener('click',()=>{openDetail=null;render();});
   content.querySelector('#editProbBtn').addEventListener('click',()=>{openForm='problema';render();});
-  content.querySelector('#deleteProbBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir este problema?'))return; const err=await deleteRow('problemas',p.id); if(err){toast('Erro ao excluir','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
   const gsp=content.querySelector('#gotoSessaoProbBtn'); if(gsp) gsp.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:p.sessao_id};render();});
   const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const statusAnt=p.status; const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await addStatusLog({problema_id:p.id},statusAnt,'Recusado'); await refreshAll(); render(); });
   const pr=content.querySelector('#promoteBtn'); if(pr) pr.addEventListener('click', async ()=>{
@@ -685,7 +720,7 @@ function attachProblemaDetailHandlers(content,p){
 /* ===================== INICIATIVAS (admin) ===================== */
 function renderIniciativasTab(content){
   let list=cache.iniciativas;
-  if(filterStatus!=='all') list=list.filter(c=>c.status===filterStatus);
+  if(filterStatus!=='all') list=list.filter(c=>normStatus(c.status)===normStatus(filterStatus));
   list=[...list].sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em));
   const detail=openDetail&&openDetail.type==='caso'?cache.iniciativas.find(c=>c.id===openDetail.id):null;
 
@@ -694,10 +729,10 @@ function renderIniciativasTab(content){
   else if(detail) html+=casoDetailHtml(detail);
 
   if(!openForm&&!detail){
-    html+=list.length?list.map(c=>{const col=STATUS_COLOR[c.status];const tg=(Number(c.ganho_fin)||0)>0||(Number(c.ganho_op)||0)>0;return `<div class="list-row" data-open="${c.id}"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(c.codigo||'')}</span>${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><span>${esc(c.area||'—')}</span><span>${esc(c.dono||'—')}</span>${tg?`<span style="color:var(--green);font-family:var(--font-mono)">${(Number(c.ganho_fin)||0)>0?fmtMoney(c.ganho_fin)+'/mês':''}${(Number(c.ganho_fin)||0)>0&&(Number(c.ganho_op)||0)>0?' · ':''}${(Number(c.ganho_op)||0)>0?fmtHoras(c.ganho_op)+'/mês':''}</span>`:''}</div></div></div>`;}).join(''):`<div class="empty">${iconRocket()}<p>Nenhuma iniciativa nesse filtro.</p></div>`;
+    html+=list.length?list.map(c=>{const col=iniColor(c.status);const tg=(Number(c.ganho_fin)||0)>0||(Number(c.ganho_op)||0)>0;return `<div class="list-row" data-open="${c.id}"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(c.codigo||'')}</span>${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><span>${esc(c.area||'—')}</span><span>${esc(c.dono||'—')}</span>${tg?`<span style="color:var(--green);font-family:var(--font-mono)">${(Number(c.ganho_fin)||0)>0?fmtMoney(c.ganho_fin)+'/mês':''}${(Number(c.ganho_fin)||0)>0&&(Number(c.ganho_op)||0)>0?' · ':''}${(Number(c.ganho_op)||0)>0?fmtHoras(c.ganho_op)+'/mês':''}</span>`:''}</div></div></div>`;}).join(''):`<div class="empty">${iconRocket()}<p>Nenhuma iniciativa nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
-  content.querySelectorAll('.chip').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;render();}));
+  content.querySelectorAll('.filters .chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;render();}));
   const nb=content.querySelector('#newCasoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='caso';openDetail=null;render();});
   content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'caso',id:r.dataset.open};render();}));
   attachCasoFormHandlers(content,detail);
@@ -715,7 +750,7 @@ function casoFormHtml(editing){
     <div class="field"><label>Problema que resolve</label><input name="problema" value="${esc(c.problema)}"></div>
     <div class="field"><label>Solução implementada</label><textarea name="testado" rows="2">${esc(c.testado)}</textarea></div>
     <div class="divider"></div><div class="section-title">Ganhos e custo</div>
-    <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="number" min="0" step="100" name="ganho_fin" value="${esc(c.ganho_fin)}"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="number" min="0" step="1" name="ganho_op" value="${esc(c.ganho_op)}"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="number" min="0" step="100" name="custo" value="${esc(c.custo)}"></div></div>
+    <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="text" inputmode="decimal" data-mask="money" name="ganho_fin" value="${esc(c.ganho_fin!=null?fmtNum(c.ganho_fin,2):'')}" placeholder="0,00"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="text" inputmode="numeric" data-mask="int" name="ganho_op" value="${esc(c.ganho_op!=null?fmtNum(c.ganho_op,0):'')}" placeholder="0"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="text" inputmode="decimal" data-mask="money" name="custo" value="${esc(c.custo!=null?fmtNum(c.custo,2):'')}" placeholder="0,00"></div></div>
     <div class="field-row"><div class="field"><label>Categoria de impacto</label><select name="bucket"><option value="">Selecionar...</option>${BUCKETS.map(b=>`<option ${c.bucket===b?'selected':''}>${b}</option>`).join('')}</select></div><div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div></div>
     <div class="field"><label>Decisão final</label><input name="decisao" value="${esc(c.decisao)}"></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveCaso">Salvar</button><button type="button" class="btn btn-ghost" id="cancelCaso">Cancelar</button></div>
@@ -723,12 +758,13 @@ function casoFormHtml(editing){
 }
 function attachCasoFormHandlers(content,editing){
   const form=content.querySelector('#casoForm'); if(!form) return;
+  attachMasks(form);
   content.querySelector('#cancelCaso').addEventListener('click',()=>{openForm=null;render();});
   form.addEventListener('submit', async (e)=>{
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveCaso'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
-    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,sessao_id:d.sessao_id||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:Number(d.ganho_fin)||0,ganho_op:Number(d.ganho_op)||0,custo:Number(d.custo)||0};
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,sessao_id:d.sessao_id||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:d.bucket||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
     let err;
     if(editing){
       const statusAnt = editing.status;
@@ -743,13 +779,13 @@ function attachCasoFormHandlers(content,editing){
   });
 }
 function casoDetailHtml(c){
-  const col=STATUS_COLOR[c.status];
+  const col=iniColor(c.status);
   const ses=c.sessao_id?cache.sessoes.find(s=>s.id===c.sessao_id):null;
   const prob=c.problema_id?cache.problemas.find(p=>p.id===c.problema_id):null;
   const gf=Number(c.ganho_fin)||0,go=Number(c.ganho_op)||0,cu=Number(c.custo)||0;
   const payback=(gf>0&&cu>0)?(cu/gf):null;
   let pb='—'; if(payback!==null){ pb=payback<1?'<1 mês':Math.round(payback)+(Math.round(payback)===1?' mês':' meses'); }
-  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editCasoBtn">Editar</button><button class="btn btn-ghost" id="deleteCasoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeCasoBtn">Voltar</button></div></div>
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editCasoBtn">Editar</button><button class="btn btn-ghost" id="closeCasoBtn">Voltar</button></div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(c.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(c.titulo)}</div></div>
     <div class="hero-grid" style="margin-bottom:16px"><div class="hero-card fin"><div class="hero-label">Ganho financeiro</div><div class="hero-value">${gf>0?fmtMoney(gf):'—'}</div><div class="hero-sub">${gf>0?'por mês':'não informado'}</div></div><div class="hero-card op"><div class="hero-label">Ganho operacional</div><div class="hero-value">${go>0?fmtHoras(go):'—'}</div><div class="hero-sub">${go>0?'por mês':'não informado'}</div></div><div class="hero-card roi"><div class="hero-label">Payback</div><div class="hero-value">${pb}</div><div class="hero-sub">${cu>0?'Custo: '+fmtMoney(cu):'informe custo'}</div></div></div>
     <div class="detail-grid"><div class="detail-field"><div class="k">Área</div><div class="v">${esc(c.area)||'—'}</div></div><div class="detail-field"><div class="k">Dono</div><div class="v">${esc(c.dono)||'—'}</div></div><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(c.data)}</div></div><div class="detail-field"><div class="k">Categoria</div><div class="v">${esc(c.bucket)||'—'}</div></div>${prob?`<div class="detail-field"><div class="k">Problema de origem</div><div class="v"><a href="#" id="gotoProbBtn" style="color:var(--accent);text-decoration:none">${esc(prob.codigo)} · GUT ${gutScore(prob)}</a></div></div>`:''}<div class="detail-field"><div class="k">Sessão</div><div class="v">${ses?`<a href="#" id="gotoSessaoBtn" style="color:var(--accent);text-decoration:none">${esc(ses.codigo)} · ${fmtDate(ses.data)}</a>`:'—'}</div></div></div>
@@ -766,7 +802,6 @@ function attachCasoDetailHandlers(content,c){
   content.querySelector('#editCasoBtn').addEventListener('click',()=>{openForm='caso';render();});
   const gs=content.querySelector('#gotoSessaoBtn'); if(gs) gs.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:c.sessao_id};render();});
   const gp=content.querySelector('#gotoProbBtn'); if(gp) gp.addEventListener('click',(e)=>{e.preventDefault();currentTab='problemas';openDetail={type:'problema',id:c.problema_id};render();});
-  content.querySelector('#deleteCasoBtn').addEventListener('click', async ()=>{ if(!confirm('Excluir esta iniciativa?'))return; const err=await deleteRow('iniciativas',c.id); if(err){toast('Erro','err');return;} await refreshAll(); openDetail=null; render(); toast('Excluído','ok'); });
   attachTimelineHandler(content,'tlIniciativa',{iniciativa_id:c.id});
 }
 
@@ -844,7 +879,7 @@ function attachSessaoFormHandlers(content,editing){
 }
 function sessaoDetailHtml(s){
   const ligadas=cache.iniciativas.filter(c=>c.sessao_id===s.id);
-  const lig=ligadas.length?ligadas.map(c=>{const col=STATUS_COLOR[c.status];return `<div class="list-row" data-openini="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
+  const lig=ligadas.length?ligadas.map(c=>{const col=iniColor(c.status);return `<div class="list-row" data-openini="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
   const problemasLig=cache.problemas.filter(p=>p.sessao_id===s.id);
   const ligProb=problemasLig.length?problemasLig.map(p=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(p.codigo)} ${esc(p.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhum problema vinculado.</div>`;
   return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:var(--accent-soft);color:var(--accent)">${esc(s.codigo||'')} · Sessão ${esc(s.numero||'—')}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editSessaoBtn">Editar</button><button class="btn btn-ghost" id="deleteSessaoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeSessaoBtn">Voltar</button></div></div>
