@@ -197,8 +197,9 @@ const CONFIGURED = SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.length >
 const sb = CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 /* ===================== CONSTANTES ===================== */
-const STATUS = ['Priorizado','Em Implementação','Implementado','Descartado','Em Pausa'];
+const STATUS = ['Nova','Em Implementação','Implementado','Descartado','Em Pausa'];
 const STATUS_COLOR = {
+  'Nova':{c:'var(--slate)',bg:'var(--slate-soft)'},
   'Priorizado':{c:'var(--slate)',bg:'var(--slate-soft)'},
   'Em Implementação':{c:'var(--amber)',bg:'var(--amber-soft)'},
   'Implementado':{c:'var(--green)',bg:'var(--green-soft)'},
@@ -236,7 +237,7 @@ let session = null;          // sessão Supabase Auth (admin logado)
 let isAdmin = false;         // usuário logado consta em `admins`?
 let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [] };
 let currentTab = 'dashboard';
-let filterStatus = 'Priorizado';
+let filterStatus = 'Nova';
 let filterProbStatus = 'Novo';
 let openForm = null;
 let openDetail = null;
@@ -593,7 +594,7 @@ function renderDashboard(){
 
   const funil=`<div class="stat-strip">
     <div class="stat-pill" style="background:var(--accent-soft);border-color:var(--accent)33"><span class="n" style="color:var(--accent)">${cache.problemas.filter(p=>p.status==='Novo').length}</span><span class="l">Problemas na fila</span></div>
-    ${STATUS.map(s=>{const col=STATUS_COLOR[s];const n=casos.filter(c=>c.status===s).length;return `<div class="stat-pill" style="background:${col.bg};border-color:${col.c}33"><span class="n" style="color:${col.c}">${n}</span><span class="l">${s}</span></div>`;}).join('')}
+    ${STATUS.map(s=>{const col=STATUS_COLOR[s]||{c:'var(--slate)',bg:'var(--slate-soft)'};const n=casos.filter(c=>{const a=normStatus(c.status),b=normStatus(s);return a===b||(b===normStatus('Nova')&&a===normStatus('Priorizado'));}).length;return `<div class="stat-pill" style="background:${col.bg};border-color:${col.c}33"><span class="n" style="color:${col.c}">${n}</span><span class="l">${s}</span></div>`;}).join('')}
   </div>`;
 
   const bucketsHtml=BUCKETS.map(b=>{
@@ -631,7 +632,7 @@ function renderProblemasTab(content){
   if(!openForm&&!detail){
     if(list.length){
       html+=`<div class="section-title">Fila priorizada por GUT (maior score no topo)</div>`;
-      html+=list.map((p,i)=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
+      html+=list.map((p,i)=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);const ses=p.sessao_id?cache.sessoes.find(x=>x.id===p.sessao_id):null;const sesBadge=p.sessao_id?`<span class="badge" style="background:var(--accent-soft);color:var(--accent)" title="Vinculado a uma sessão"><svg viewBox="0 0 24 24" width="11" height="11" style="vertical-align:-1px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${ses?esc(ses.codigo||('Sessão '+(ses.numero||''))):'Em sessão'}</span>`:'';return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span>${sesBadge}<span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
     } else html+=`<div class="empty">${iconInbox()}<p>Nenhum problema nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
@@ -707,7 +708,7 @@ function attachProblemaDetailHandlers(content,p){
   const gsp=content.querySelector('#gotoSessaoProbBtn'); if(gsp) gsp.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:p.sessao_id};render();});
   const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const statusAnt=p.status; const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await addStatusLog({problema_id:p.id},statusAnt,'Recusado'); await refreshAll(); render(); });
   const pr=content.querySelector('#promoteBtn'); if(pr) pr.addEventListener('click', async ()=>{
-    const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Priorizado',data:today(),problema:p.descricao||p.titulo,ganho_fin:0,ganho_op:0,custo:0};
+    const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Nova',data:today(),problema:p.descricao||p.titulo,ganho_fin:0,ganho_op:0,custo:0};
     const {data,error}=await insertRow('iniciativas',novo);
     if(error){toast('Erro ao promover','err');console.error(error);return;}
     const statusAnt = p.status;
@@ -722,7 +723,7 @@ function attachProblemaDetailHandlers(content,p){
 /* ===================== INICIATIVAS (admin) ===================== */
 function renderIniciativasTab(content){
   let list=cache.iniciativas;
-  if(filterStatus!=='all') list=list.filter(c=>normStatus(c.status)===normStatus(filterStatus));
+  if(filterStatus!=='all') list=list.filter(c=>{const a=normStatus(c.status),b=normStatus(filterStatus);return a===b||(b===normStatus('Nova')&&a===normStatus('Priorizado'));});
   list=[...list].sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em));
   const detail=openDetail&&openDetail.type==='caso'?cache.iniciativas.find(c=>c.id===openDetail.id):null;
 
@@ -731,7 +732,7 @@ function renderIniciativasTab(content){
   else if(detail) html+=casoDetailHtml(detail);
 
   if(!openForm&&!detail){
-    html+=list.length?list.map(c=>{const col=iniColor(c.status);const tg=(Number(c.ganho_fin)||0)>0||(Number(c.ganho_op)||0)>0;return `<div class="list-row" data-open="${c.id}"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(c.codigo||'')}</span>${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><span>${esc(c.area||'—')}</span><span>${esc(c.dono||'—')}</span>${tg?`<span style="color:var(--green);font-family:var(--font-mono)">${(Number(c.ganho_fin)||0)>0?fmtMoney(c.ganho_fin)+'/mês':''}${(Number(c.ganho_fin)||0)>0&&(Number(c.ganho_op)||0)>0?' · ':''}${(Number(c.ganho_op)||0)>0?fmtHoras(c.ganho_op)+'/mês':''}</span>`:''}</div></div></div>`;}).join(''):`<div class="empty">${iconRocket()}<p>Nenhuma iniciativa nesse filtro.</p></div>`;
+    html+=list.length?list.map(c=>{const col=iniColor(c.status);const tg=(Number(c.ganho_fin)||0)>0||(Number(c.ganho_op)||0)>0;const ses=c.sessao_id?cache.sessoes.find(x=>x.id===c.sessao_id):null;const sesBadge=c.sessao_id?`<span class="badge" style="background:var(--accent-soft);color:var(--accent)" title="Vinculada a uma sessão"><svg viewBox="0 0 24 24" width="11" height="11" style="vertical-align:-1px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${ses?esc(ses.codigo||('Sessão '+(ses.numero||''))):'Em sessão'}</span>`:'';return `<div class="list-row" data-open="${c.id}"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(c.codigo||'')}</span>${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span>${sesBadge}<span>${esc(c.area||'—')}</span><span>${esc(c.dono||'—')}</span>${tg?`<span style="color:var(--green);font-family:var(--font-mono)">${(Number(c.ganho_fin)||0)>0?fmtMoney(c.ganho_fin)+'/mês':''}${(Number(c.ganho_fin)||0)>0&&(Number(c.ganho_op)||0)>0?' · ':''}${(Number(c.ganho_op)||0)>0?fmtHoras(c.ganho_op)+'/mês':''}</span>`:''}</div></div></div>`;}).join(''):`<div class="empty">${iconRocket()}<p>Nenhuma iniciativa nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
   content.querySelectorAll('.filters .chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;openForm=null;openDetail=null;render();}));
@@ -827,7 +828,8 @@ function sessaoFilaCandidatos(editing){
   const probOk=st=>normStatus(st)===normStatus('Novo')||normStatus(st)===normStatus('Priorizado');
   const problemas=cache.problemas.filter(p=>(editing&&p.sessao_id===editing.id)||(probOk(p.status)&&!p.sessao_id))
     .sort((a,b)=>gutScore(b)-gutScore(a));
-  const iniciativas=cache.iniciativas.filter(c=>(editing&&c.sessao_id===editing.id)||(normStatus(c.status)===normStatus('Priorizado')&&!c.sessao_id))
+  const iniOk=st=>normStatus(st)===normStatus('Nova')||normStatus(st)===normStatus('Priorizado');
+  const iniciativas=cache.iniciativas.filter(c=>(editing&&c.sessao_id===editing.id)||(iniOk(c.status)&&!c.sessao_id))
     .sort((a,b)=>(a.titulo||'').localeCompare(b.titulo||''));
   return {problemas,iniciativas};
 }
