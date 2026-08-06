@@ -6,7 +6,7 @@
 <title>Cultura de IA — Gestão de Iniciativas</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
- 
+
 :root{
   --bg:#0B0F1A; --surface:#131A2B; --surface-2:#1B2438; --border:#232E47;
   --text:#E7ECF5; --text-muted:#8B96AC;
@@ -548,17 +548,18 @@ function renderPublic(){
 /* ===================== APP ADMIN ===================== */
 function renderAdminApp(){
   const app=document.getElementById('app');
-  const novos = cache.problemas.filter(p=>p.status==='Novo').length;
+  const novos = cache.problemas.filter(p=>normStatus(p.status)===normStatus('Novo')).length;
+  const novasIni = cache.iniciativas.filter(c=>normStatus(c.status)===normStatus('Nova')||normStatus(c.status)===normStatus('Priorizado')).length;
   app.innerHTML=`
     <div class="header">
       ${flaskIcon(26)}
       <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · matriz GUT · priorização semanal · ganhos</p></div>
-      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button></div>
+      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" style="opacity:.5;font-size:10px">build 2026-08-06c · badge iniciativas</span></div>
     </div>
     <div class="nav">
       <button data-tab="dashboard" class="${currentTab==='dashboard'?'active':''}">${iconDash()} Dashboard</button>
       <button data-tab="problemas" class="${currentTab==='problemas'?'active':''}">${iconInbox()} Problemas ${novos?`<span class="count-dot">${novos}</span>`:''}</button>
-      <button data-tab="iniciativas" class="${currentTab==='iniciativas'?'active':''}">${iconRocket()} Iniciativas</button>
+      <button data-tab="iniciativas" class="${currentTab==='iniciativas'?'active':''}">${iconRocket()} Iniciativas ${novasIni?`<span class="count-dot">${novasIni}</span>`:''}</button>
       <button data-tab="sessoes" class="${currentTab==='sessoes'?'active':''}">${iconCal()} Sessões</button>
     </div>
     <div id="content"></div>
