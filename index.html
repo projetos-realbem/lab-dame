@@ -99,6 +99,13 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body
 .impact-opt:hover{border-color:var(--accent);}
 .impact-opt span{flex:1;}
 .impact-opt input{margin:0 2px 0 0;}
+.impact-int{display:flex;flex-direction:column;gap:5px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+.impact-int-label{font-size:12.5px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.impact-int select{width:100%;}
+.score-block{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:6px;}
+.score-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.score-title{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);}
+.score-live{font-family:var(--font-mono);font-weight:600;}
 .field input[type="date"]{cursor:pointer;color-scheme:dark;}
 .field input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer;padding:2px;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);}
@@ -214,34 +221,86 @@ const PROB_STATUS_COLOR = {
   'Priorizado':{c:'var(--green)',bg:'var(--green-soft)'},
   'Recusado':{c:'var(--rose)',bg:'var(--rose-soft)'}
 };
-const BUCKETS = ['Tempo economizado','Custo reduzido','Solução construída internamente','Qualidade de entrega','Velocidade de decisão','Redução de risco ou inadimplência','Geração de receita ou conversão'];
-function parseImpacto(v){ return (v||'').split(/\s*[;,|]\s*/).map(s=>s.trim()).filter(Boolean); }
-function impactoChecksHtml(selectedRaw, fieldName){
-  const name=fieldName||'impacto';
-  const sel=parseImpacto(selectedRaw);
-  return `<div class="impact-grid">${BUCKETS.map(b=>`<label class="impact-opt"><input type="checkbox" name="${name}" value="${esc(b)}" ${sel.includes(b)?'checked':''}><span>${esc(b)}</span></label>`).join('')}</div>`;
+/* ===== IMPACTOS PONDERADOS (substitui a Matriz GUT) ===== */
+// Fallback usado só se a tabela `impactos` ainda não existir/carregar.
+const IMPACTOS_SEED = [
+  {nome:'Geração de receita ou conversão', peso:5, ordem:1, ativo:true},
+  {nome:'Redução de custo',                peso:5, ordem:2, ativo:true},
+  {nome:'Redução de risco ou inadimplência',peso:4, ordem:3, ativo:true},
+  {nome:'Tempo economizado',               peso:3, ordem:4, ativo:true},
+  {nome:'Qualidade de entrega',            peso:3, ordem:5, ativo:true},
+  {nome:'Velocidade de decisão',           peso:2, ordem:6, ativo:true}
+];
+// Escalas Nenhum/Baixo/Médio/Alto
+const INTENSIDADES = [[0,'Nenhum'],[1,'Baixo'],[2,'Médio'],[3,'Alto']];
+// Esforço: mesma escala, mas "Nenhum" vale 1 no denominador (nunca divide por zero)
+const ESFORCOS = [[1,'Baixo'],[2,'Médio'],[3,'Alto']];
+const ESFORCO_LABEL = {1:'Baixo',2:'Médio',3:'Alto'};
+
+// Lista de impactos ativos (do cache, ordenados); cai no seed se vazio
+function impactosAtivos(){
+  const list=(cache.impactos||[]).filter(i=>i.ativo!==false);
+  const base=list.length?list:IMPACTOS_SEED;
+  return [...base].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
 }
-function collectChecks(form, name){ return Array.from(form.querySelectorAll('input[name="'+name+'"]:checked')).map(c=>c.value).join(', '); }
-function collectImpacto(form){ return collectChecks(form,'impacto'); }
-const GUT_LABELS = {
-  gravidade:{titulo:'Gravidade',hint:'Impacto se nada for feito',opcoes:[[1,'1 · Sem gravidade'],[2,'2 · Pouco grave'],[3,'3 · Grave'],[4,'4 · Muito grave'],[5,'5 · Extremamente grave']]},
-  urgencia:{titulo:'Urgência',hint:'Prazo para agir',opcoes:[[1,'1 · Pode esperar'],[2,'2 · Pouco urgente'],[3,'3 · Urgente, prazo médio'],[4,'4 · Muito urgente'],[5,'5 · Ação imediata']]},
-  tendencia:{titulo:'Tendência',hint:'Como evolui se ignorado',opcoes:[[1,'1 · Não vai piorar'],[2,'2 · Piora no longo prazo'],[3,'3 · Piora com o tempo'],[4,'4 · Piora rápido'],[5,'5 · Piora imediatamente']]}
-};
-function gutScore(p){ const g=Number(p.gravidade)||0,u=Number(p.urgencia)||0,t=Number(p.tendencia)||0; return g*u*t; }
-function gutColor(s){ if(s>=64)return{c:'var(--rose)',bg:'var(--rose-soft)',label:'Crítico'}; if(s>=27)return{c:'var(--amber)',bg:'var(--amber-soft)',label:'Alto'}; if(s>=8)return{c:'var(--accent)',bg:'var(--accent-soft)',label:'Médio'}; return{c:'var(--slate)',bg:'var(--slate-soft)',label:'Baixo'}; }
+function impactoPeso(nome){
+  const i=(cache.impactos||[]).find(x=>normStatus(x.nome)===normStatus(nome));
+  if(i) return Number(i.peso)||0;
+  const s=IMPACTOS_SEED.find(x=>normStatus(x.nome)===normStatus(nome));
+  return s?s.peso:0;
+}
+// intensidades marcadas: objeto {nome_impacto: intensidade}
+function parseIntensidades(v){ if(!v) return {}; if(typeof v==='object') return v; try{ return JSON.parse(v)||{}; }catch(e){ return {}; } }
+// score = Σ(peso × intensidade) ÷ esforço
+function impactScore(item){
+  const marc=parseIntensidades(item.impactos_json);
+  let bruto=0;
+  for(const nome in marc){ const inten=Number(marc[nome])||0; if(inten>0) bruto+=impactoPeso(nome)*inten; }
+  const esf=Number(item.esforco)||1;
+  return esf>0 ? bruto/esf : bruto;
+}
+function scoreColor(s){ if(s>=20)return{c:'var(--rose)',bg:'var(--rose-soft)',label:'Altíssimo'}; if(s>=10)return{c:'var(--amber)',bg:'var(--amber-soft)',label:'Alto'}; if(s>=4)return{c:'var(--accent)',bg:'var(--accent-soft)',label:'Médio'}; return{c:'var(--slate)',bg:'var(--slate-soft)',label:'Baixo'}; }
+// resumo textual dos impactos marcados (para telas de detalhe/legado)
+function impactosResumo(item){
+  const marc=parseIntensidades(item.impactos_json);
+  const labelInt=n=>((INTENSIDADES.find(([v])=>v===Number(n))||[])[1]||'');
+  const parts=Object.keys(marc).filter(n=>Number(marc[n])>0).map(n=>`${n} (${labelInt(marc[n])})`);
+  if(parts.length) return parts.join(', ');
+  return item.impacto||''; // fallback texto legado
+}
+
+// grid de intensidade por impacto (usado nos formulários)
+function impactoIntensidadeHtml(item){
+  const marc=parseIntensidades(item&&item.impactos_json);
+  const ativos=impactosAtivos();
+  if(!ativos.length) return '<div style="font-size:12px;color:var(--text-muted)">Nenhum impacto cadastrado. Cadastre em Impactos.</div>';
+  return `<div class="impact-grid">${ativos.map(imp=>{
+    const cur=Number(marc[imp.nome]||0);
+    return `<div class="impact-int"><div class="impact-int-label">${esc(imp.nome)} <span class="hint">peso ${imp.peso}</span></div>`+
+      `<select name="imp::${esc(imp.nome)}">${INTENSIDADES.map(([v,l])=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`).join('')}</select></div>`;
+  }).join('')}</div>`;
+}
+// coleta as intensidades do form -> {nome: intensidade} (só as >0)
+function collectIntensidades(form){
+  const out={};
+  form.querySelectorAll('select[name^="imp::"]').forEach(s=>{
+    const nome=s.name.slice(5); const v=Number(s.value)||0; if(v>0) out[nome]=v;
+  });
+  return out;
+}
 const FORMATOS = ['Priorização semanal','Demo de caso','Exploração de técnica','Review de resultado','Outro'];
 
 /* ===================== ESTADO ===================== */
 let session = null;          // sessão Supabase Auth (admin logado)
 let isAdmin = false;         // usuário logado consta em `admins`?
-let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [] };
+let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [], impactos: [] };
 let currentTab = 'dashboard';
 let filterStatus = 'Nova';
 let filterProbStatus = 'Novo';
 let openForm = null;
 let openDetail = null;
-let gutBuffer = {gravidade:3, urgencia:3, tendencia:3};
+let impBuffer = { intensidades:{}, esforco:1 }; // buffer do formulário público
+let openImpForm = null; // null | 'new' | id do impacto em edição
 let publicView = 'form';     // tela pública: 'form' | 'sent'
 let busy = false;
 
@@ -279,17 +338,19 @@ function today(){ return new Date().toISOString().slice(0,10); }
 /* ===================== DATA LAYER (Supabase) ===================== */
 async function refreshAll(){
   if(!sb) return;
-  const [pr, ini, ses, com] = await Promise.all([
+  const [pr, ini, ses, com, imp] = await Promise.all([
     sb.from('problemas').select('*'),
     sb.from('iniciativas').select('*'),
     sb.from('sessoes').select('*'),
-    sb.from('comentarios').select('*').order('criado_em',{ascending:true})
+    sb.from('comentarios').select('*').order('criado_em',{ascending:true}),
+    sb.from('impactos').select('*')
   ]);
   if(pr.error && pr.error.code!=='42501') console.error(pr.error);
   cache.problemas   = pr.data   || [];
   cache.iniciativas = ini.data  || [];
   cache.sessoes     = ses.data  || [];
   cache.comentarios = com.data  || [];
+  cache.impactos    = (imp && imp.data) || [];
 }
 
 async function insertProblemaPublic(payload){
@@ -406,6 +467,7 @@ function iconDash(){return `<svg viewBox="0 0 24 24" fill="none" stroke="current
 function iconInbox(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`;}
 function iconRocket(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>`;}
 function iconCal(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;}
+function iconSliders(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`;}
 function iconLock(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;}
 
 /* ===================== BOOT / ROOT RENDER ===================== */
@@ -445,12 +507,12 @@ function renderPublic(){
         <div class="header" style="justify-content:center">${flaskIcon(26)}<div><h1>Problema enviado</h1></div></div>
         <div class="card" style="text-align:center">
           <div style="color:var(--green);font-size:15px;margin-bottom:8px">✓ Recebemos seu problema</div>
-          <p style="color:var(--text-muted);font-size:13.5px;margin:0 0 16px">Ele entra na fila e será avaliado e priorizado por GUT na próxima sessão semanal.</p>
+          <p style="color:var(--text-muted);font-size:13.5px;margin:0 0 16px">Ele entra na fila e será avaliado e priorizado pelo score de impacto na próxima sessão semanal.</p>
           <button class="btn" id="againBtn">Enviar outro problema</button>
         </div>
         <p class="public-note"><button class="link-btn" id="adminLink">Acesso administrativo</button></p>
       </div>`;
-    app.querySelector('#againBtn').addEventListener('click', ()=>{ gutBuffer={gravidade:3,urgencia:3,tendencia:3}; publicView='form'; render(); });
+    app.querySelector('#againBtn').addEventListener('click', ()=>{ impBuffer={intensidades:{},esforco:1}; publicView='form'; render(); });
     app.querySelector('#adminLink').addEventListener('click', ()=>{ publicView='login'; render(); });
     return;
   }
@@ -480,7 +542,7 @@ function renderPublic(){
     return;
   }
   // form público de envio
-  const g=gutBuffer; const score=gutScore(g); const gc=gutColor(score);
+  const buf={impactos_json:impBuffer.intensidades, esforco:impBuffer.esforco}; const score=impactScore(buf); const gc=scoreColor(score);
   app.innerHTML = `
     <div class="center-wrap">
       <div class="header" style="margin-bottom:28px">
@@ -497,10 +559,11 @@ function renderPublic(){
               <div class="field"><label>Área / setor <span style="color:var(--rose)">*</span></label><input name="area" required placeholder="Ex: Crédito, Cobrança, Atendimento"></div>
             </div>
             <div class="field"><label>Descreva a dor <span style="color:var(--rose)">*</span> <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="4" required placeholder="Contexto, frequência, quem é afetado e qual o impacto atual"></textarea></div>
-            <div class="field"><label>Impacto estimado <span style="color:var(--rose)">*</span> <span class="hint">— selecione os ganhos esperados</span></label>${impactoChecksHtml('')}</div>
-            <div class="gut-block">
-              <div class="gut-head"><span class="gut-title">Matriz GUT — classifique seu problema</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div>
-              <div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div>
+            <div class="field"><label>Impacto estimado <span style="color:var(--rose)">*</span> <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(buf)}</div>
+            <div class="field" style="max-width:280px"><label>Esforço estimado <span class="hint">— para implementar</span></label><select name="esforco" data-score-input>${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(impBuffer.esforco)===v?'selected':''}>${l}</option>`).join('')}</select></div>
+            <div class="score-block">
+              <div class="score-head"><span class="score-title">Prioridade estimada</span><span class="score-live" id="scoreLive" style="color:${gc.c}">Score ${score.toFixed(1)} · ${gc.label}</span></div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.5">Calculado como (soma dos impactos × peso) ÷ esforço. Quanto maior, mais alto na fila.</div>
             </div>
             <div class="btn-row"><button class="btn" type="submit" id="pubBtn" style="padding:11px 24px;font-size:14px">Enviar para a fila</button></div>
           </form>
@@ -508,37 +571,38 @@ function renderPublic(){
         <div class="info-panel">
           <div class="info-card">
             <div class="info-title">Como funciona</div>
-            <div class="info-step"><span class="step-num">1</span><span>Você descreve o problema e classifica pela <strong>Matriz GUT</strong> — Gravidade, Urgência e Tendência.</span></div>
-            <div class="info-step"><span class="step-num">2</span><span>Na <strong>sessão semanal</strong>, a equipe revisa a fila priorizada pelo score GUT e decide quais viram iniciativas de IA.</span></div>
+            <div class="info-step"><span class="step-num">1</span><span>Você descreve o problema e indica <strong>quais ganhos</strong> ele traz e com que <strong>intensidade</strong>, além do esforço estimado.</span></div>
+            <div class="info-step"><span class="step-num">2</span><span>Na <strong>sessão semanal</strong>, a equipe revisa a fila priorizada pelo <strong>score de impacto</strong> e decide quais viram iniciativas de IA.</span></div>
             <div class="info-step"><span class="step-num">3</span><span>Cada iniciativa implementada tem seus <strong>ganhos financeiros e operacionais</strong> registrados no dashboard.</span></div>
           </div>
           <div class="info-card">
-            <div class="info-title">Escala GUT</div>
-            <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">Score = G × U × T (máx. 125)</div>
+            <div class="info-title">Como o score é calculado</div>
+            <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">Score = (Σ impacto × peso) ÷ esforço</div>
             <div style="display:flex;flex-wrap:wrap;gap:4px">
-              <span class="gut-pill" style="background:var(--rose-soft);color:var(--rose)">≥ 64 · Crítico</span>
-              <span class="gut-pill" style="background:var(--amber-soft);color:var(--amber)">≥ 27 · Alto</span>
-              <span class="gut-pill" style="background:var(--accent-soft);color:var(--accent)">≥ 8 · Médio</span>
-              <span class="gut-pill" style="background:var(--slate-soft);color:var(--slate)">< 8 · Baixo</span>
+              <span class="gut-pill" style="background:var(--rose-soft);color:var(--rose)">≥ 20 · Altíssimo</span>
+              <span class="gut-pill" style="background:var(--amber-soft);color:var(--amber)">≥ 10 · Alto</span>
+              <span class="gut-pill" style="background:var(--accent-soft);color:var(--accent)">≥ 4 · Médio</span>
+              <span class="gut-pill" style="background:var(--slate-soft);color:var(--slate)">< 4 · Baixo</span>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.5">Quanto maior o score, mais alto o problema sobe na fila. Os itens críticos são discutidos primeiro nas sessões.</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.5">Cada ganho tem um peso definido pela gestão. Quanto maior o impacto e menor o esforço, mais alto o problema sobe na fila.</div>
           </div>
           <div class="info-card" style="border-color:var(--accent);background:var(--accent-soft)">
             <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:6px">Campos obrigatórios</div>
-            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5">Todos os campos são obrigatórios exceto a Matriz GUT, que já vem com valores padrão mas pode ser ajustada.</div>
+            <div style="font-size:12.5px;color:var(--text-muted);line-height:1.5">Todos os campos são obrigatórios. Marque ao menos um impacto com intensidade acima de "Nenhum".</div>
           </div>
         </div>
       </div>
     </div>`;
-  attachGutLive(app.querySelector('#pubForm'), true);
+  attachScoreLive(app.querySelector('#pubForm'), true);
   app.querySelector('#adminLink').addEventListener('click', ()=>{ publicView='login'; render(); });
   app.querySelector('#pubForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
     const b=app.querySelector('#pubBtn'); b.disabled=true; b.textContent='Enviando…';
     const fd=new FormData(e.target); const d=Object.fromEntries(fd.entries());
-    const impacto=collectImpacto(e.target);
-    if(!impacto){ toast('Selecione ao menos um impacto estimado.','err'); b.disabled=false; b.textContent='Enviar para a fila'; return; }
-    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao, impacto:impacto, gravidade:gutBuffer.gravidade, urgencia:gutBuffer.urgencia, tendencia:gutBuffer.tendencia, status:'Novo' };
+    const inten=collectIntensidades(e.target);
+    if(!Object.keys(inten).length){ toast('Marque ao menos um impacto com intensidade acima de "Nenhum".','err'); b.disabled=false; b.textContent='Enviar para a fila'; return; }
+    const esf=Number(d.esforco)||1;
+    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao, impacto:impactosResumo({impactos_json:inten}), impactos_json:inten, esforco:esf, status:'Novo' };
     const err=await insertProblemaPublic(payload);
     if(err){ toast('Não foi possível enviar. Tente de novo.', 'err'); console.error(err); b.disabled=false; b.textContent='Enviar para a fila'; return; }
     publicView='sent'; render();
@@ -553,18 +617,19 @@ function renderAdminApp(){
   app.innerHTML=`
     <div class="header">
       ${flaskIcon(26)}
-      <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · matriz GUT · priorização semanal · ganhos</p></div>
-      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" style="opacity:.5;font-size:10px">build 2026-08-06c · badge iniciativas</span></div>
+      <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · priorização por impacto · sessões semanais · ganhos</p></div>
+      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" style="opacity:.5;font-size:10px">build 2026-09-16 · impactos ponderados</span></div>
     </div>
     <div class="nav">
       <button data-tab="dashboard" class="${currentTab==='dashboard'?'active':''}">${iconDash()} Dashboard</button>
       <button data-tab="problemas" class="${currentTab==='problemas'?'active':''}">${iconInbox()} Problemas ${novos?`<span class="count-dot">${novos}</span>`:''}</button>
       <button data-tab="iniciativas" class="${currentTab==='iniciativas'?'active':''}">${iconRocket()} Iniciativas ${novasIni?`<span class="count-dot">${novasIni}</span>`:''}</button>
       <button data-tab="sessoes" class="${currentTab==='sessoes'?'active':''}">${iconCal()} Sessões</button>
+      <button data-tab="impactos" class="${currentTab==='impactos'?'active':''}">${iconSliders()} Impactos</button>
     </div>
     <div id="content"></div>
     <footer><button id="refreshBtn">recarregar dados</button></footer>`;
-  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; render(); }));
+  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; openImpForm=null; render(); }));
   app.querySelector('#logoutBtn').addEventListener('click', doLogout);
   app.querySelector('#refreshBtn').addEventListener('click', async ()=>{ await refreshAll(); render(); toast('Dados recarregados','ok'); });
 
@@ -573,6 +638,61 @@ function renderAdminApp(){
   if(currentTab==='problemas') renderProblemasTab(content);
   if(currentTab==='iniciativas') renderIniciativasTab(content);
   if(currentTab==='sessoes') renderSessoesTab(content);
+  if(currentTab==='impactos') renderImpactosTab(content);
+}
+
+/* ===================== IMPACTOS (admin) ===================== */
+function renderImpactosTab(content){
+  const list=[...(cache.impactos||[])].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+  const editing = openImpForm && openImpForm!=='new' ? list.find(i=>i.id===openImpForm) : null;
+  const semTabela = !cache.impactos; // não deveria ocorrer, mas guarda
+
+  let html=`<div class="top-actions"><div><div class="section-title" style="margin:0">Impactos e pesos</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">O peso multiplica a intensidade marcada em cada problema/iniciativa. Score = (Σ peso × intensidade) ÷ esforço.</div></div><button class="btn" id="newImpBtn">+ Novo impacto</button></div>`;
+
+  if(openImpForm){
+    const e=editing||{nome:'',peso:3,ordem:(list.length?Math.max(...list.map(i=>i.ordem||0))+1:1),ativo:true};
+    html+=`<div class="form-panel"><div class="section-title">${editing?'Editar impacto':'Novo impacto'}</div><form id="impForm">
+      <div class="field"><label>Nome</label><input name="nome" required value="${esc(e.nome)}" placeholder="Ex: Redução de custo"></div>
+      <div class="field-row"><div class="field"><label>Peso <span class="hint">— importância relativa</span></label><input name="peso" type="number" min="0" step="1" required value="${e.peso}"></div><div class="field"><label>Ordem <span class="hint">— posição na lista</span></label><input name="ordem" type="number" min="0" step="1" value="${e.ordem||0}"></div></div>
+      ${editing?`<div class="field"><label><input type="checkbox" name="ativo" ${e.ativo!==false?'checked':''} style="width:15px;height:15px;margin-right:8px;vertical-align:-2px">Ativo <span class="hint">— impactos inativos não aparecem nos formulários, mas o histórico é preservado</span></label></div>`:''}
+      <div class="btn-row"><button type="submit" class="btn" id="saveImp">Salvar</button><button type="button" class="btn btn-ghost" id="cancelImp">Cancelar</button></div>
+    </form></div>`;
+  }
+
+  html+=`<div class="card">`;
+  if(!list.length){
+    html+=`<div style="font-size:13px;color:var(--text-muted);padding:8px 4px">Nenhum impacto cadastrado ainda. Use "+ Novo impacto" para começar.${(IMPACTOS_SEED.length?' A migração SQL já semeia uma lista sugerida.':'')}</div>`;
+  } else {
+    html+=list.map(i=>`<div class="list-row" style="cursor:default"><div class="list-row-body"><div class="list-row-title" style="font-size:14px">${esc(i.nome)} ${i.ativo===false?'<span class="badge" style="background:var(--slate-soft);color:var(--slate)">inativo</span>':''}</div><div class="list-row-meta"><span class="gut-badge" style="background:var(--accent-soft);color:var(--accent)">peso ${i.peso}</span><span>ordem ${i.ordem||0}</span></div></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost imp-edit" data-id="${i.id}">Editar</button><button class="btn btn-ghost imp-toggle" data-id="${i.id}">${i.ativo===false?'Ativar':'Desativar'}</button></div></div>`).join('');
+  }
+  html+=`</div>`;
+  content.innerHTML=html;
+
+  const nb=content.querySelector('#newImpBtn'); if(nb) nb.addEventListener('click',()=>{openImpForm='new';render();});
+  content.querySelectorAll('.imp-edit').forEach(b=>b.addEventListener('click',()=>{openImpForm=b.dataset.id;render();}));
+  content.querySelectorAll('.imp-toggle').forEach(b=>b.addEventListener('click',async()=>{
+    const imp=list.find(i=>i.id===b.dataset.id); if(!imp)return;
+    const err=await updateRow('impactos',imp.id,{ativo:imp.ativo===false});
+    if(err){toast('Erro ao atualizar','err');console.error(err);return;}
+    await refreshAll();render();toast('Atualizado','ok');
+  }));
+
+  const form=content.querySelector('#impForm');
+  if(form){
+    content.querySelector('#cancelImp').addEventListener('click',()=>{openImpForm=null;render();});
+    form.addEventListener('submit',async(e)=>{
+      e.preventDefault(); if(busy)return; busy=true;
+      const b=content.querySelector('#saveImp'); b.disabled=true;
+      const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
+      const payload={nome:(d.nome||'').trim(),peso:Number(d.peso)||0,ordem:Number(d.ordem)||0};
+      let err;
+      if(editing){ payload.ativo=form.querySelector('[name="ativo"]')?form.querySelector('[name="ativo"]').checked:true; err=await updateRow('impactos',editing.id,payload); }
+      else { payload.ativo=true; err=(await insertRow('impactos',payload)).error; }
+      busy=false;
+      if(err){ toast('Erro ao salvar','err'); console.error(err); b.disabled=false; return; }
+      openImpForm=null; await refreshAll(); render(); toast('Salvo','ok');
+    });
+  }
 }
 
 /* ===================== DASHBOARD ===================== */
@@ -598,10 +718,13 @@ function renderDashboard(){
     ${STATUS.map(s=>{const col=STATUS_COLOR[s]||{c:'var(--slate)',bg:'var(--slate-soft)'};const n=casos.filter(c=>{const a=normStatus(c.status),b=normStatus(s);return a===b||(b===normStatus('Nova')&&a===normStatus('Priorizado'));}).length;return `<div class="stat-pill" style="background:${col.bg};border-color:${col.c}33"><span class="n" style="color:${col.c}">${n}</span><span class="l">${s}</span></div>`;}).join('')}
   </div>`;
 
-  const bucketsHtml=BUCKETS.map(b=>{
-    const cb=casos.filter(c=>parseImpacto(c.bucket).includes(b)&&(isImplementado(c)||isEmImplementacao(c)));
+  const ativos=casos.filter(c=>isImplementado(c)||isEmImplementacao(c));
+  const temImpacto=(c,nome)=>{const m=parseIntensidades(c.impactos_json);if(m&&Object.keys(m).length)return Number(m[nome])>0;return String(c.bucket||'').split(/\s*,\s*/).includes(nome);};
+  const bucketsHtml=impactosAtivos().map(imp=>{
+    const b=imp.nome;
+    const cb=ativos.filter(c=>temImpacto(c,b));
     const ex=cb.slice(0,2).map(c=>`<div>${esc(c.codigo||'')} ${esc(c.titulo)}${c.resultado?' — '+esc(c.resultado):''}</div>`).join('');
-    return `<div class="bucket-card"><div class="num">${cb.length}</div><div class="label">${b}</div>${ex?`<div class="examples">${ex}</div>`:''}</div>`;
+    return `<div class="bucket-card"><div class="num">${cb.length}</div><div class="label">${esc(b)}</div>${ex?`<div class="examples">${ex}</div>`:''}</div>`;
   }).join('');
 
   const ranked=[...casos].filter(c=>isImplementado(c)||isEmImplementacao(c)).sort((a,b)=>(Number(b.ganho_fin)||0)-(Number(a.ganho_fin)||0)).slice(0,6);
@@ -623,7 +746,7 @@ function renderProblemasTab(content){
   const detail = openDetail&&openDetail.type==='problema' ? cache.problemas.find(p=>p.id===openDetail.id) : null;
   let list=cache.problemas;
   if(filterProbStatus!=='all') list=list.filter(p=>normStatus(p.status)===normStatus(filterProbStatus));
-  list=[...list].sort((a,b)=>gutScore(b)-gutScore(a)||(new Date(b.criado_em)-new Date(a.criado_em)));
+  list=[...list].sort((a,b)=>impactScore(b)-impactScore(a)||(new Date(b.criado_em)-new Date(a.criado_em)));
 
   let html=`<div class="top-actions"><div class="filters">${PROB_STATUS.map(s=>`<div class="chip ${filterProbStatus===s?'active':''}" data-pf="${s}">${s}</div>`).join('')}</div><button class="btn" id="newProbBtn">+ Novo problema</button></div>`;
 
@@ -633,39 +756,42 @@ function renderProblemasTab(content){
   if(!openForm&&!detail){
     if(list.length){
       html+=`<div class="section-title">Fila priorizada por GUT (maior score no topo)</div>`;
-      html+=list.map((p,i)=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);const ses=p.sessao_id?cache.sessoes.find(x=>x.id===p.sessao_id):null;const sesBadge=p.sessao_id?`<span class="badge" style="background:var(--accent-soft);color:var(--accent)" title="Vinculado a uma sessão"><svg viewBox="0 0 24 24" width="11" height="11" style="vertical-align:-1px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${ses?esc(ses.codigo||('Sessão '+(ses.numero||''))):'Em sessão'}</span>`:'';return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span>${sesBadge}<span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
+      html+=list.map((p,i)=>{const score=impactScore(p);const gc=scoreColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);const ses=p.sessao_id?cache.sessoes.find(x=>x.id===p.sessao_id):null;const sesBadge=p.sessao_id?`<span class="badge" style="background:var(--accent-soft);color:var(--accent)" title="Vinculado a uma sessão"><svg viewBox="0 0 24 24" width="11" height="11" style="vertical-align:-1px;margin-right:3px" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${ses?esc(ses.codigo||('Sessão '+(ses.numero||''))):'Em sessão'}</span>`:'';return `<div class="list-row" data-openprob="${p.id}"><div class="rank-num">${i+1}</div><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(p.codigo||'')}</span>${esc(p.titulo)}</div><div class="list-row-meta"><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">Score ${score.toFixed(1)} · ${gc.label}</span><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span>${sesBadge}<span>${esc(p.area||'—')}</span><span>por ${esc(p.solicitante||'—')}</span></div></div></div>`;}).join('');
     } else html+=`<div class="empty">${iconInbox()}<p>Nenhum problema nesse filtro.</p></div>`;
   }
   content.innerHTML=html;
   content.querySelectorAll('.filters .chip[data-pf]').forEach(ch=>ch.addEventListener('click',()=>{filterProbStatus=ch.dataset.pf;openForm=null;openDetail=null;render();}));
-  const nb=content.querySelector('#newProbBtn'); if(nb) nb.addEventListener('click',()=>{gutBuffer={gravidade:3,urgencia:3,tendencia:3};openForm='problema';openDetail=null;render();});
+  const nb=content.querySelector('#newProbBtn'); if(nb) nb.addEventListener('click',()=>{openForm='problema';openDetail=null;render();});
   content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'problema',id:r.dataset.openprob};render();}));
   if(openForm==='problema') attachProblemaFormHandlers(content, detail);
   else attachProblemaDetailHandlers(content, detail);
 }
 
-function gutScaleHtml(key,value){const cfg=GUT_LABELS[key];return `<div class="gut-scale"><label>${cfg.titulo} <span class="hint">— ${cfg.hint}</span></label><select name="${key}" data-gut="${key}">${cfg.opcoes.map(([v,l])=>`<option value="${v}" ${Number(value)===v?'selected':''}>${l}</option>`).join('')}</select></div>`;}
-function attachGutLive(form, isPublic){
+// recalcula o score de impacto ao vivo conforme o usuário mexe nos selects
+function attachScoreLive(form, isPublic){
   if(!form) return;
   const recalc=()=>{
-    const g=Number(form.querySelector('[data-gut="gravidade"]').value),u=Number(form.querySelector('[data-gut="urgencia"]').value),t=Number(form.querySelector('[data-gut="tendencia"]').value);
-    gutBuffer={gravidade:g,urgencia:u,tendencia:t};
-    const gc=gutColor(g*u*t);const el=form.querySelector('#gutScoreLive');
-    if(el){el.textContent=`GUT ${g*u*t} · ${gc.label}`;el.style.color=gc.c;}
+    const inten=collectIntensidades(form);
+    const esfEl=form.querySelector('[name="esforco"]');
+    const esf=esfEl?Number(esfEl.value)||1:1;
+    if(isPublic){ impBuffer={intensidades:inten, esforco:esf}; }
+    const sc=impactScore({impactos_json:inten, esforco:esf});
+    const col=scoreColor(sc);const el=form.querySelector('#scoreLive');
+    if(el){el.textContent=`Score ${sc.toFixed(1)} · ${col.label}`;el.style.color=col.c;}
   };
-  form.querySelectorAll('[data-gut]').forEach(s=>s.addEventListener('change',recalc));
+  form.querySelectorAll('select[name^="imp::"],[name="esforco"]').forEach(s=>s.addEventListener('change',recalc));
 }
 
 function problemaFormHtml(editing){
-  const p=editing||{};
-  const g=editing?{gravidade:p.gravidade,urgencia:p.urgencia,tendencia:p.tendencia}:gutBuffer;
-  const score=gutScore(g);const gc=gutColor(score);
+  const p=editing||{esforco:1};
+  const score=impactScore(p);const gc=scoreColor(score);
   return `<div class="form-panel"><div class="section-title">${editing?'Editar problema':'Novo problema'}</div><form id="probForm">
     <div class="field"><label>Título</label><input name="titulo" required value="${esc(p.titulo)}"></div>
     <div class="field-row"><div class="field"><label>Solicitante</label><input name="solicitante" value="${esc(p.solicitante)}"></div><div class="field"><label>Área</label><input name="area" value="${esc(p.area)}"></div></div>
     <div class="field"><label>Descrição da dor</label><textarea name="descricao" rows="3">${esc(p.descricao)}</textarea></div>
-    <div class="field"><label>Impacto estimado</label>${impactoChecksHtml(p.impacto)}</div>
-    <div class="gut-block"><div class="gut-head"><span class="gut-title">Matriz GUT</span><span class="gut-score" id="gutScoreLive" style="color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="gut-scales">${gutScaleHtml('gravidade',g.gravidade)}${gutScaleHtml('urgencia',g.urgencia)}${gutScaleHtml('tendencia',g.tendencia)}</div></div>
+    <div class="field"><label>Impacto estimado <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(p)}</div>
+    <div class="field" style="max-width:280px"><label>Esforço estimado</label><select name="esforco">${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(p.esforco||1)===v?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="score-block"><div class="score-head"><span class="score-title">Prioridade estimada</span><span class="score-live" id="scoreLive" style="color:${gc.c}">Score ${score.toFixed(1)} · ${gc.label}</span></div></div>
     ${editing?`<div class="field"><label>Status</label><select name="status">${PROB_STATUS.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
     <div class="btn-row"><button type="submit" class="btn" id="saveProb">Salvar</button><button type="button" class="btn btn-ghost" id="cancelProb">Cancelar</button></div>
   </form></div>`;
@@ -673,12 +799,13 @@ function problemaFormHtml(editing){
 function attachProblemaFormHandlers(content,editing){
   const form=content.querySelector('#probForm'); if(!form) return;
   content.querySelector('#cancelProb').addEventListener('click',()=>{openForm=null;render();});
-  attachGutLive(form, false);
+  attachScoreLive(form, false);
   form.addEventListener('submit', async (e)=>{
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveProb'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
-    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:collectImpacto(form)||null,gravidade:gutBuffer.gravidade,urgencia:gutBuffer.urgencia,tendencia:gutBuffer.tendencia};
+    const inten=collectIntensidades(form);
+    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:impactosResumo({impactos_json:inten})||null,impactos_json:inten,esforco:Number(d.esforco)||1};
     let err;
     if(editing){ payload.status=d.status; err=await updateRow('problemas',editing.id,payload); }
     else { payload.status='Novo'; err=(await insertRow('problemas',payload)).error; }
@@ -688,12 +815,13 @@ function attachProblemaFormHandlers(content,editing){
   });
 }
 function problemaDetailHtml(p){
-  const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);
+  const score=impactScore(p);const gc=scoreColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);
   const jaPromovido=cache.iniciativas.some(c=>c.problema_id===p.id);
   const ses=p.sessao_id?cache.sessoes.find(x=>x.id===p.sessao_id):null;
-  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score} · ${gc.label}</span></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editProbBtn">Editar</button><button class="btn btn-ghost" id="closeProbBtn">Voltar</button></div></div>
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">Score ${score.toFixed(1)} · ${gc.label}</span></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editProbBtn">Editar</button><button class="btn btn-ghost" id="closeProbBtn">Voltar</button></div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(p.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(p.titulo)}</div></div>
-    <div class="detail-grid"><div class="detail-field"><div class="k">Solicitante</div><div class="v">${esc(p.solicitante)||'—'}</div></div><div class="detail-field"><div class="k">Área</div><div class="v">${esc(p.area)||'—'}</div></div><div class="detail-field"><div class="k">Gravidade</div><div class="v big">${p.gravidade||'—'}</div></div><div class="detail-field"><div class="k">Urgência</div><div class="v big">${p.urgencia||'—'}</div></div><div class="detail-field"><div class="k">Tendência</div><div class="v big">${p.tendencia||'—'}</div></div><div class="detail-field"><div class="k">Score GUT</div><div class="v big" style="color:${gc.c}">${score}</div></div></div>
+    <div class="detail-grid"><div class="detail-field"><div class="k">Solicitante</div><div class="v">${esc(p.solicitante)||'—'}</div></div><div class="detail-field"><div class="k">Área</div><div class="v">${esc(p.area)||'—'}</div></div><div class="detail-field"><div class="k">Esforço</div><div class="v big">${ESFORCO_LABEL[Number(p.esforco)||1]||'—'}</div></div><div class="detail-field"><div class="k">Score de impacto</div><div class="v big" style="color:${gc.c}">${score.toFixed(1)}</div></div></div>
+    <div class="detail-field" style="margin-top:6px"><div class="k">Impactos estimados</div><div class="v">${esc(impactosResumo(p))||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Descrição</div><div class="v">${esc(p.descricao)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Impacto estimado</div><div class="v">${esc(p.impacto)||'—'}</div></div>
     ${ses?`<div class="detail-field" style="margin-bottom:12px"><div class="k">Sessão vinculada</div><div class="v"><a href="#" id="gotoSessaoProbBtn" style="color:var(--accent)">${esc(ses.codigo||'')} · ${fmtDate(ses.data)}${ses.ancora?' · '+esc(ses.ancora):''}</a></div></div>`:''}
@@ -754,7 +882,9 @@ function casoFormHtml(editing){
     <div class="field"><label>Solução implementada</label><textarea name="testado" rows="2">${esc(c.testado)}</textarea></div>
     <div class="divider"></div><div class="section-title">Ganhos e custo</div>
     <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="text" inputmode="decimal" data-mask="money" name="ganho_fin" value="${esc(c.ganho_fin!=null?fmtNum(c.ganho_fin,2):'')}" placeholder="0,00"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="text" inputmode="numeric" data-mask="int" name="ganho_op" value="${esc(c.ganho_op!=null?fmtNum(c.ganho_op,0):'')}" placeholder="0"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="text" inputmode="decimal" data-mask="money" name="custo" value="${esc(c.custo!=null?fmtNum(c.custo,2):'')}" placeholder="0,00"></div></div>
-    <div class="field"><label>Categoria de impacto <span class="hint">— selecione uma ou mais</span></label>${impactoChecksHtml(c.bucket,'bucket')}</div>
+    <div class="divider"></div><div class="section-title">Impacto e esforço</div>
+    <div class="field"><label>Impacto estimado <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(c)}</div>
+    <div class="field" style="max-width:280px"><label>Esforço estimado</label><select name="esforco">${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(c.esforco||1)===v?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div>
     <div class="field"><label>Decisão final</label><input name="decisao" value="${esc(c.decisao)}"></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveCaso">Salvar</button><button type="button" class="btn btn-ghost" id="cancelCaso">Cancelar</button></div>
@@ -768,7 +898,8 @@ function attachCasoFormHandlers(content,editing){
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveCaso'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
-    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,bucket:collectChecks(form,'bucket')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
+    const inten=collectIntensidades(form);
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,impactos_json:inten,esforco:Number(d.esforco)||1,bucket:Object.keys(inten).join(', ')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
     let err;
     if(editing){
       const statusAnt = editing.status;
@@ -792,7 +923,7 @@ function casoDetailHtml(c){
   return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editCasoBtn">Editar</button><button class="btn btn-ghost" id="closeCasoBtn">Voltar</button></div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(c.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(c.titulo)}</div></div>
     <div class="hero-grid" style="margin-bottom:16px"><div class="hero-card fin"><div class="hero-label">Ganho financeiro</div><div class="hero-value">${gf>0?fmtMoney(gf):'—'}</div><div class="hero-sub">${gf>0?'por mês':'não informado'}</div></div><div class="hero-card op"><div class="hero-label">Ganho operacional</div><div class="hero-value">${go>0?fmtHoras(go):'—'}</div><div class="hero-sub">${go>0?'por mês':'não informado'}</div></div><div class="hero-card roi"><div class="hero-label">Payback</div><div class="hero-value">${pb}</div><div class="hero-sub">${cu>0?'Custo: '+fmtMoney(cu):'informe custo'}</div></div></div>
-    <div class="detail-grid"><div class="detail-field"><div class="k">Área</div><div class="v">${esc(c.area)||'—'}</div></div><div class="detail-field"><div class="k">Dono</div><div class="v">${esc(c.dono)||'—'}</div></div><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(c.data)}</div></div><div class="detail-field"><div class="k">Categoria</div><div class="v">${esc(c.bucket)||'—'}</div></div>${prob?`<div class="detail-field"><div class="k">Problema de origem</div><div class="v"><a href="#" id="gotoProbBtn" style="color:var(--accent);text-decoration:none">${esc(prob.codigo)} · GUT ${gutScore(prob)}</a></div></div>`:''}<div class="detail-field"><div class="k">Sessão</div><div class="v">${ses?`<a href="#" id="gotoSessaoBtn" style="color:var(--accent);text-decoration:none">${esc(ses.codigo)} · ${fmtDate(ses.data)}</a>`:'—'}</div></div></div>
+    <div class="detail-grid"><div class="detail-field"><div class="k">Área</div><div class="v">${esc(c.area)||'—'}</div></div><div class="detail-field"><div class="k">Dono</div><div class="v">${esc(c.dono)||'—'}</div></div><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(c.data)}</div></div><div class="detail-field"><div class="k">Impactos</div><div class="v">${esc(impactosResumo(c))||'—'}</div></div>${prob?`<div class="detail-field"><div class="k">Problema de origem</div><div class="v"><a href="#" id="gotoProbBtn" style="color:var(--accent);text-decoration:none">${esc(prob.codigo)} · Score ${impactScore(prob).toFixed(1)}</a></div></div>`:''}<div class="detail-field"><div class="k">Sessão</div><div class="v">${ses?`<a href="#" id="gotoSessaoBtn" style="color:var(--accent);text-decoration:none">${esc(ses.codigo)} · ${fmtDate(ses.data)}</a>`:'—'}</div></div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Problema</div><div class="v">${esc(c.problema)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Solução implementada</div><div class="v">${esc(c.testado)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Resultado</div><div class="v">${esc(c.resultado)||'—'}</div></div>
@@ -828,7 +959,7 @@ function renderSessoesTab(content){
 function sessaoFilaCandidatos(editing){
   const probOk=st=>normStatus(st)===normStatus('Novo')||normStatus(st)===normStatus('Priorizado');
   const problemas=cache.problemas.filter(p=>(editing&&p.sessao_id===editing.id)||(probOk(p.status)&&!p.sessao_id))
-    .sort((a,b)=>gutScore(b)-gutScore(a));
+    .sort((a,b)=>impactScore(b)-impactScore(a));
   const iniOk=st=>normStatus(st)===normStatus('Nova')||normStatus(st)===normStatus('Priorizado');
   const iniciativas=cache.iniciativas.filter(c=>(editing&&c.sessao_id===editing.id)||(iniOk(c.status)&&!c.sessao_id))
     .sort((a,b)=>(a.titulo||'').localeCompare(b.titulo||''));
@@ -837,7 +968,7 @@ function sessaoFilaCandidatos(editing){
 function sessaoFormHtml(editing){
   const s=editing||{};
   const {problemas,iniciativas}=sessaoFilaCandidatos(editing);
-  const probHtml=problemas.length?problemas.map(p=>{const score=gutScore(p);const gc=gutColor(score);return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="prob_ids" value="${p.id}" ${p.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(p.codigo||'')}</span><span style="flex:1">${esc(p.titulo)}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c};font-size:10.5px">GUT ${score}</span></label>`;}).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhum problema disponível na fila.</div>`;
+  const probHtml=problemas.length?problemas.map(p=>{const score=impactScore(p);const gc=scoreColor(score);return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="prob_ids" value="${p.id}" ${p.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(p.codigo||'')}</span><span style="flex:1">${esc(p.titulo)}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c};font-size:10.5px">Score ${score.toFixed(1)}</span></label>`;}).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhum problema disponível na fila.</div>`;
   const iniHtml=iniciativas.length?iniciativas.map(c=>`<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 2px"><input type="checkbox" name="ini_ids" value="${c.id}" ${c.sessao_id===s.id?'checked':''}><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11px">${esc(c.codigo||'')}</span><span style="flex:1">${esc(c.titulo)}</span></label>`).join(''):`<div style="font-size:12px;color:var(--text-muted);padding:4px 2px">Nenhuma iniciativa priorizada aguardando sessão.</div>`;
   return `<div class="form-panel"><div class="section-title">${editing?'Editar sessão':'Nova sessão'}</div><form id="sessaoForm">
     <div class="field-row"><div class="field"><label>Data</label><input type="date" name="data" value="${esc(s.data)||today()}"></div><div class="field"><label>Número</label><input name="numero" value="${esc(s.numero)}" placeholder="Ex: 03"></div></div>
@@ -887,7 +1018,7 @@ function sessaoDetailHtml(s){
   const ligadas=cache.iniciativas.filter(c=>c.sessao_id===s.id);
   const lig=ligadas.length?ligadas.map(c=>{const col=iniColor(c.status);return `<div class="list-row" data-openini="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
   const problemasLig=cache.problemas.filter(p=>p.sessao_id===s.id);
-  const ligProb=problemasLig.length?problemasLig.map(p=>{const score=gutScore(p);const gc=gutColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(p.codigo)} ${esc(p.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">GUT ${score}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhum problema vinculado.</div>`;
+  const ligProb=problemasLig.length?problemasLig.map(p=>{const score=impactScore(p);const gc=scoreColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(p.codigo)} ${esc(p.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">Score ${score.toFixed(1)}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhum problema vinculado.</div>`;
   return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:var(--accent-soft);color:var(--accent)">${esc(s.codigo||'')} · Sessão ${esc(s.numero||'—')}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editSessaoBtn">Editar</button><button class="btn btn-ghost" id="deleteSessaoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeSessaoBtn">Voltar</button></div></div>
     <div class="detail-grid"><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(s.data)}</div></div><div class="detail-field"><div class="k">Âncora</div><div class="v">${esc(s.ancora)||'—'}</div></div><div class="detail-field"><div class="k">Formato</div><div class="v">${esc(s.formato)||'—'}</div></div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Notas / tema</div><div class="v">${esc(s.problema)||'—'}</div></div>
