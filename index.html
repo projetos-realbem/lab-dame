@@ -560,18 +560,13 @@ function renderPublic(){
             </div>
             <div class="field"><label>Descreva a dor <span style="color:var(--rose)">*</span> <span class="hint">— o que acontece hoje e por que incomoda</span></label><textarea name="descricao" rows="4" required placeholder="Contexto, frequência, quem é afetado e qual o impacto atual"></textarea></div>
             <div class="field"><label>Impacto estimado <span style="color:var(--rose)">*</span> <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(buf)}</div>
-            <div class="field" style="max-width:280px"><label>Esforço estimado <span class="hint">— para implementar</span></label><select name="esforco" data-score-input>${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(impBuffer.esforco)===v?'selected':''}>${l}</option>`).join('')}</select></div>
-            <div class="score-block">
-              <div class="score-head"><span class="score-title">Prioridade estimada</span><span class="score-live" id="scoreLive" style="color:${gc.c}">Score ${score.toFixed(1)} · ${gc.label}</span></div>
-              <div style="font-size:12px;color:var(--text-muted);line-height:1.5">Calculado como (soma dos impactos × peso) ÷ esforço. Quanto maior, mais alto na fila.</div>
-            </div>
             <div class="btn-row"><button class="btn" type="submit" id="pubBtn" style="padding:11px 24px;font-size:14px">Enviar para a fila</button></div>
           </form>
         </div>
         <div class="info-panel">
           <div class="info-card">
             <div class="info-title">Como funciona</div>
-            <div class="info-step"><span class="step-num">1</span><span>Você descreve o problema e indica <strong>quais ganhos</strong> ele traz e com que <strong>intensidade</strong>, além do esforço estimado.</span></div>
+            <div class="info-step"><span class="step-num">1</span><span>Você descreve o problema e indica <strong>quais ganhos</strong> ele traz e com que <strong>intensidade</strong>.</span></div>
             <div class="info-step"><span class="step-num">2</span><span>Na <strong>sessão semanal</strong>, a equipe revisa a fila priorizada pelo <strong>score de impacto</strong> e decide quais viram iniciativas de IA.</span></div>
             <div class="info-step"><span class="step-num">3</span><span>Cada iniciativa implementada tem seus <strong>ganhos financeiros e operacionais</strong> registrados no dashboard.</span></div>
           </div>
@@ -584,7 +579,7 @@ function renderPublic(){
               <span class="gut-pill" style="background:var(--accent-soft);color:var(--accent)">≥ 4 · Médio</span>
               <span class="gut-pill" style="background:var(--slate-soft);color:var(--slate)">< 4 · Baixo</span>
             </div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.5">Cada ganho tem um peso definido pela gestão. Quanto maior o impacto e menor o esforço, mais alto o problema sobe na fila.</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:12px;line-height:1.5">Cada ganho tem um peso definido pela gestão. O <strong>esforço</strong> de implementação é definido pela equipe durante a <strong>sessão de priorização</strong>. Quanto maior o impacto e menor o esforço, mais alto o problema sobe na fila.</div>
           </div>
           <div class="info-card" style="border-color:var(--accent);background:var(--accent-soft)">
             <div style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:6px">Campos obrigatórios</div>
@@ -593,7 +588,6 @@ function renderPublic(){
         </div>
       </div>
     </div>`;
-  attachScoreLive(app.querySelector('#pubForm'), true);
   app.querySelector('#adminLink').addEventListener('click', ()=>{ publicView='login'; render(); });
   app.querySelector('#pubForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
