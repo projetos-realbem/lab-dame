@@ -190,6 +190,13 @@ footer button:hover{opacity:1;}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* =====================================================================
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  ÚLTIMA ATUALIZAÇÃO DO SISTEMA — edite esta linha a cada deploy   │
+   └─────────────────────────────────────────────────────────────────┘ */
+const BUILD_DATA = '2026-09-16 19:40';   // formato: AAAA-MM-DD HH:MM
+const BUILD_NOTA = 'impactos ponderados'; // descrição curta da mudança (opcional)
+
+/* =====================================================================
    CONFIGURAÇÃO — vem de window.APP_CONFIG, definido em config.js
    (arquivo fora do Git). Ver config.example.js para o modelo.
    ===================================================================== */
@@ -303,6 +310,7 @@ let busy = false;
 /* ===================== HELPERS ===================== */
 function esc(s){ if(s===undefined||s===null)return''; return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function fmtDate(d){ if(!d)return'—'; const [y,m,day]=String(d).split('-'); return day&&m&&y?`${day}/${m}/${y}`:d; }
+function fmtBuild(){ const [dt,hr]=String(BUILD_DATA).trim().split(/\s+/); const [y,m,d]=(dt||'').split('-'); const dataBr=(y&&m&&d)?`${d}/${m}/${y}`:(dt||BUILD_DATA); const quando=hr?`${dataBr} às ${hr}`:dataBr; return `atualizado em ${quando}${BUILD_NOTA?' · '+BUILD_NOTA:''}`; }
 function fmtMoney(n){ return 'R$ '+(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function fmtHoras(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'h'; }
 /* ---- máscara de valores (pt-BR) ---- */
@@ -608,7 +616,7 @@ function renderAdminApp(){
     <div class="header">
       ${flaskIcon(26)}
       <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · priorização por impacto · sessões semanais · ganhos</p></div>
-      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" style="opacity:.5;font-size:10px">build 2026-09-16 · impactos ponderados</span></div>
+      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" style="opacity:.5;font-size:10px">${fmtBuild()}</span></div>
     </div>
     <div class="nav">
       <button data-tab="dashboard" class="${currentTab==='dashboard'?'active':''}">${iconDash()} Dashboard</button>
