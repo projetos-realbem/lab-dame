@@ -850,7 +850,7 @@ function renderIniciativasTab(content){
   list=[...list].sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em));
   const detail=openDetail&&openDetail.type==='caso'?cache.iniciativas.find(c=>c.id===openDetail.id):null;
 
-  let html=`<div class="top-actions"><div class="filters">${STATUS.map(s=>`<div class="chip ${filterStatus===s?'active':''}" data-f="${s}">${s}</div>`).join('')}</div><button class="btn" id="newCasoBtn">+ Nova iniciativa</button></div>`;
+  let html=`<div class="top-actions"><div class="filters">${STATUS.map(s=>`<div class="chip ${filterStatus===s?'active':''}" data-f="${s}">${s}</div>`).join('')}</div></div>`;
   if(openForm==='caso') html+=casoFormHtml(detail);
   else if(detail) html+=casoDetailHtml(detail);
 
@@ -859,7 +859,6 @@ function renderIniciativasTab(content){
   }
   content.innerHTML=html;
   content.querySelectorAll('.filters .chip[data-f]').forEach(ch=>ch.addEventListener('click',()=>{filterStatus=ch.dataset.f;openForm=null;openDetail=null;render();}));
-  const nb=content.querySelector('#newCasoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='caso';openDetail=null;render();});
   content.querySelectorAll('[data-open]').forEach(r=>r.addEventListener('click',()=>{openDetail={type:'caso',id:r.dataset.open};render();}));
   if(openForm==='caso') attachCasoFormHandlers(content,detail);
   else attachCasoDetailHandlers(content,detail);
@@ -901,7 +900,7 @@ function attachCasoFormHandlers(content,editing){
       if(!err && payload.status && payload.status!==statusAnt){
         await addStatusLog({iniciativa_id:editing.id}, statusAnt, payload.status);
       }
-    } else err=(await insertRow('iniciativas',payload)).error;
+    } else { busy=false; toast('Iniciativas só podem ser criadas ao priorizar um problema.','err'); b.disabled=false; return; }
     busy=false;
     if(err){toast('Erro ao salvar','err');console.error(err);b.disabled=false;return;}
     await refreshAll(); openForm=null; render(); toast('Salvo','ok');
