@@ -642,8 +642,7 @@ function renderPublic(){
     const fd=new FormData(e.target); const d=Object.fromEntries(fd.entries());
     const inten=collectIntensidades(e.target);
     if(!Object.keys(inten).length){ toast('Marque ao menos um impacto com intensidade acima de "Nenhum".','err'); b.disabled=false; b.textContent='Enviar para a fila'; return; }
-    const esf=Number(d.esforco)||1;
-    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao, impacto:impactosResumo({impactos_json:inten}), impactos_json:inten, esforco:esf, status:'Novo' };
+    const payload={ titulo:d.titulo, solicitante:d.solicitante, area:d.area, descricao:d.descricao, impacto:impactosResumo({impactos_json:inten}), impactos_json:inten, esforco:null, status:'Novo' };
     const err=await insertProblemaPublic(payload);
     if(err){ toast('Não foi possível enviar. Tente de novo.', 'err'); console.error(err); b.disabled=false; b.textContent='Enviar para a fila'; return; }
     publicView='sent'; render();
@@ -823,14 +822,26 @@ function renderDashboard(){
     const b=imp.nome;
     const cb=ativos.filter(c=>intensidadeDe(c,b)>0);
     const valor=ativos.reduce((s,c)=>s+intensidadeDe(c,b)*(Number(imp.peso)||0),0);
-    return {nome:b, cb, valor};
+    return {nome:b, n:cb.length, valor};
   }).sort((a,b)=>b.valor-a.valor);
   const maxValor=Math.max(...bucketsData.map(d=>d.valor),1);
-  const bucketsHtml=bucketsData.map(d=>{
-    const ex=d.cb.slice(0,2).map(c=>`<div>${esc(c.codigo||'')} ${esc(c.titulo)}${c.resultado?' — '+esc(c.resultado):''}</div>`).join('');
-    const w=Math.max(4, d.valor/maxValor*100);
-    return `<div class="bucket-card"><div class="num">${d.valor}</div><div class="label">${esc(d.nome)} <span style="color:var(--text-muted)">· ${d.cb.length} iniciativa(s)</span></div><div class="mini-bar-wrap" style="margin-top:8px"><div class="mini-bar" style="width:${w}%;background:var(--accent)"></div></div>${ex?`<div class="examples">${ex}</div>`:''}</div>`;
-  }).join('');
+  const barRow=(nome,valor,n,max,vazio)=>{
+    const w=Math.max(2, valor/max*100);
+    const cor=vazio?'var(--border-strong)':'var(--accent)';
+    const tcol=vazio?'color:var(--text-muted)':'';
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><span style="font-size:12px;width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${tcol}" title="${esc(nome)}${n!=null?' · '+n+' iniciativa(s)':''}">${esc(nome)}</span><div class="mini-bar-wrap" style="flex:1;margin:0"><div class="mini-bar" style="width:${w}%;background:${cor}"></div></div><span style="font-family:var(--font-mono);font-size:13px;font-weight:500;width:28px;text-align:right;${tcol}">${valor}</span></div>`;
+  };
+  const bucketsHtml=bucketsData.map(d=>barRow(d.nome,d.valor,d.n,maxValor,d.valor===0)).join('')||`<div class="empty"><p>Nenhum impacto registrado ainda.</p></div>`;
+
+  // resumo de abordagens escolhidas (todas as iniciativas com abordagem definida)
+  const aboCount={};
+  cache.iniciativas.forEach(c=>{ if(c.abordagem){ aboCount[c.abordagem]=(aboCount[c.abordagem]||0)+1; } });
+  const aboData=abordagensAtivas().map(a=>({nome:a.nome, n:aboCount[a.nome]||0}));
+  // inclui abordagens legadas/inativas que tenham iniciativas
+  Object.keys(aboCount).forEach(nome=>{ if(!aboData.some(a=>normStatus(a.nome)===normStatus(nome))) aboData.push({nome, n:aboCount[nome]}); });
+  aboData.sort((a,b)=>b.n-a.n);
+  const maxAbo=Math.max(...aboData.map(d=>d.n),1);
+  const abordagensHtml=aboData.length?aboData.map(d=>barRow(d.nome,d.n,null,maxAbo,d.n===0)).join(''):`<div class="empty"><p>Nenhuma abordagem definida ainda.</p></div>`;
 
   const ranked=[...casos].filter(c=>isImplementado(c)||isEmImplementacao(c)).sort((a,b)=>(Number(b.ganho_fin)||0)-(Number(a.ganho_fin)||0)).slice(0,6);
   const maxFin=ranked.length?Math.max(...ranked.map(c=>Number(c.ganho_fin)||0),1):1;
@@ -850,7 +861,10 @@ function renderDashboard(){
       <div><div class="section-title" style="margin-top:22px">Top iniciativas por ganho financeiro</div><div class="card">${rankHtml}</div></div>
       <div><div class="section-title" style="margin-top:22px">Top iniciativas por score de impacto</div><div class="card">${rankScoreHtml}</div></div>
     </div>
-    <div class="section-title" style="margin-top:24px">Valor por dimensão de impacto <span class="hint" style="text-transform:none;letter-spacing:0">— peso × intensidade acumulados (implementadas e em andamento)</span></div><div class="bucket-grid">${bucketsHtml}</div>
+    <div class="rank-grid" style="margin-top:24px">
+      <div><div class="section-title" style="margin-top:0">Valor por dimensão de impacto <span class="hint" style="text-transform:none;letter-spacing:0">— peso × intensidade</span></div><div class="card">${bucketsHtml}</div></div>
+      <div><div class="section-title" style="margin-top:0">Iniciativas por abordagem <span class="hint" style="text-transform:none;letter-spacing:0">— como estão sendo tratadas</span></div><div class="card">${abordagensHtml}</div></div>
+    </div>
     <div class="section-title">Últimas sessões</div><div class="card">${sessoesHtml}</div>`;
 }
 
@@ -903,7 +917,7 @@ function problemaFormHtml(editing){
     <div class="field-row"><div class="field"><label>Solicitante</label><input name="solicitante" value="${esc(p.solicitante)}"></div><div class="field"><label>Área</label><input name="area" value="${esc(p.area)}"></div></div>
     <div class="field"><label>Descrição da dor</label><textarea name="descricao" rows="3">${esc(p.descricao)}</textarea></div>
     <div class="field"><label>Impacto estimado <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(p)}</div>
-    <div class="field" style="max-width:280px"><label>Esforço estimado</label><select name="esforco">${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(p.esforco||1)===v?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="field" style="max-width:280px"><label>Esforço estimado</label><select name="esforco"><option value="">— selecionar —</option>${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(p.esforco)===v?'selected':''}>${l}</option>`).join('')}</select></div>
     <div class="score-block"><div class="score-head"><span class="score-title">Prioridade estimada</span><span class="score-live" id="scoreLive" style="color:${gc.c}">Score ${score.toFixed(1)} · ${gc.label}</span></div></div>
     ${editing?`<div class="field"><label>Status</label><select name="status">${PROB_STATUS.map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></div>`:''}
     <div class="btn-row"><button type="submit" class="btn" id="saveProb">Salvar</button><button type="button" class="btn btn-ghost" id="cancelProb">Cancelar</button></div>
@@ -918,7 +932,8 @@ function attachProblemaFormHandlers(content,editing){
     const b=content.querySelector('#saveProb'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
     const inten=collectIntensidades(form);
-    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:impactosResumo({impactos_json:inten})||null,impactos_json:inten,esforco:Number(d.esforco)||1};
+    if(!d.esforco){ busy=false; toast('Selecione o esforço estimado.','err'); b.disabled=false; return; }
+    const payload={titulo:d.titulo,solicitante:d.solicitante||null,area:d.area||null,descricao:d.descricao||null,impacto:impactosResumo({impactos_json:inten})||null,impactos_json:inten,esforco:Number(d.esforco)};
     let err;
     if(editing){ payload.status=d.status; err=await updateRow('problemas',editing.id,payload); }
     else { payload.status='Novo'; err=(await insertRow('problemas',payload)).error; }
@@ -997,7 +1012,7 @@ function casoFormHtml(editing){
     <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="text" inputmode="decimal" data-mask="money" name="ganho_fin" value="${esc(c.ganho_fin!=null?fmtNum(c.ganho_fin,2):'')}" placeholder="0,00"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="text" inputmode="numeric" data-mask="int" name="ganho_op" value="${esc(c.ganho_op!=null?fmtNum(c.ganho_op,0):'')}" placeholder="0"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="text" inputmode="decimal" data-mask="money" name="custo" value="${esc(c.custo!=null?fmtNum(c.custo,2):'')}" placeholder="0,00"></div></div>
     <div class="divider"></div><div class="section-title">Impacto e esforço</div>
     <div class="field"><label>Impacto estimado <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(c)}</div>
-    <div class="field-row"><div class="field"><label>Esforço estimado</label><select name="esforco">${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(c.esforco||1)===v?'selected':''}>${l}</option>`).join('')}</select></div><div class="field"><label>Abordagem de resolução <span class="hint">— como será tratada</span></label><select name="abordagem"><option value="">— selecionar —</option>${abordagensAtivas().map(a=>`<option ${normStatus(c.abordagem)===normStatus(a.nome)?'selected':''}>${esc(a.nome)}</option>`).join('')}${(c.abordagem&&!abordagensAtivas().some(a=>normStatus(a.nome)===normStatus(c.abordagem)))?`<option selected>${esc(c.abordagem)}</option>`:''}</select></div></div>
+    <div class="field-row"><div class="field"><label>Esforço estimado</label><select name="esforco"><option value="">— selecionar —</option>${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(c.esforco)===v?'selected':''}>${l}</option>`).join('')}</select></div><div class="field"><label>Abordagem de resolução <span class="hint">— como será tratada</span></label><select name="abordagem"><option value="">— selecionar —</option>${abordagensAtivas().map(a=>`<option ${normStatus(c.abordagem)===normStatus(a.nome)?'selected':''}>${esc(a.nome)}</option>`).join('')}${(c.abordagem&&!abordagensAtivas().some(a=>normStatus(a.nome)===normStatus(c.abordagem)))?`<option selected>${esc(c.abordagem)}</option>`:''}</select></div></div>
     <div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div>
     <div class="field"><label>Decisão final</label><input name="decisao" value="${esc(c.decisao)}"></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveCaso">Salvar</button><button type="button" class="btn btn-ghost" id="cancelCaso">Cancelar</button></div>
@@ -1012,7 +1027,8 @@ function attachCasoFormHandlers(content,editing){
     const b=content.querySelector('#saveCaso'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
     const inten=collectIntensidades(form);
-    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,impactos_json:inten,esforco:Number(d.esforco)||1,abordagem:d.abordagem||null,bucket:Object.keys(inten).join(', ')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
+    if(!d.esforco){ busy=false; toast('Selecione o esforço estimado.','err'); b.disabled=false; return; }
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,impactos_json:inten,esforco:Number(d.esforco),abordagem:d.abordagem||null,bucket:Object.keys(inten).join(', ')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
     let err;
     if(editing){
       const statusAnt = editing.status;
