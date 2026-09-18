@@ -310,7 +310,30 @@ let busy = false;
 /* ===================== HELPERS ===================== */
 function esc(s){ if(s===undefined||s===null)return''; return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function fmtDate(d){ if(!d)return'—'; const [y,m,day]=String(d).split('-'); return day&&m&&y?`${day}/${m}/${y}`:d; }
-function fmtBuild(){ const [dt,hr]=String(BUILD_DATA).trim().split(/\s+/); const [y,m,d]=(dt||'').split('-'); const dataBr=(y&&m&&d)?`${d}/${m}/${y}`:(dt||BUILD_DATA); const quando=hr?`${dataBr} às ${hr}`:dataBr; return `atualizado em ${quando}${BUILD_NOTA?' · '+BUILD_NOTA:''}`; }
+let _buildDateCache = null; // Date do Last-Modified, preenchido uma vez
+function fmtBuild(){
+  if(_buildDateCache) return fmtBuildFromDate(_buildDateCache);
+  const [dt,hr]=String(BUILD_DATA).trim().split(/\s+/); const [y,m,d]=(dt||'').split('-'); const dataBr=(y&&m&&d)?`${d}/${m}/${y}`:(dt||BUILD_DATA); const quando=hr?`${dataBr} às ${hr}`:dataBr; return `atualizado em ${quando}${BUILD_NOTA?' · '+BUILD_NOTA:''}`;
+}
+// formata um Date -> "atualizado em DD/MM/AAAA às HH:MM · nota"
+function fmtBuildFromDate(dtObj){
+  const dd=String(dtObj.getDate()).padStart(2,'0');
+  const mm=String(dtObj.getMonth()+1).padStart(2,'0');
+  const yy=dtObj.getFullYear();
+  const hh=String(dtObj.getHours()).padStart(2,'0');
+  const mi=String(dtObj.getMinutes()).padStart(2,'0');
+  return `atualizado em ${dd}/${mm}/${yy} às ${hh}:${mi}${BUILD_NOTA?' · '+BUILD_NOTA:''}`;
+}
+// busca a data real do arquivo servido (Last-Modified) uma vez, cacheia e
+// atualiza o rodapé; se falhar (ex.: file:// local) mantém o fallback manual
+async function refreshBuildStamp(){
+  if(_buildDateCache){ const el=document.getElementById('buildStamp'); if(el) el.textContent=fmtBuild(); return; }
+  try{
+    const resp=await fetch(window.location.href,{method:'HEAD',cache:'no-store'});
+    const lm=resp.headers.get('Last-Modified');
+    if(lm){ const d=new Date(lm); if(!isNaN(d)){ _buildDateCache=d; const el=document.getElementById('buildStamp'); if(el) el.textContent=fmtBuild(); } }
+  }catch(e){ /* mantém o texto de fallback já renderizado */ }
+}
 function fmtMoney(n){ return 'R$ '+(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function fmtHoras(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:1})+'h'; }
 /* ---- máscara de valores (pt-BR) ---- */
@@ -616,7 +639,7 @@ function renderAdminApp(){
     <div class="header">
       ${flaskIcon(26)}
       <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · priorização por impacto · sessões semanais · ganhos</p></div>
-      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" style="opacity:.5;font-size:10px">${fmtBuild()}</span></div>
+      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" id="buildStamp" style="opacity:.5;font-size:10px">${fmtBuild()}</span></div>
     </div>
     <div class="nav">
       <button data-tab="dashboard" class="${currentTab==='dashboard'?'active':''}">${iconDash()} Dashboard</button>
@@ -630,6 +653,7 @@ function renderAdminApp(){
   app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; openImpForm=null; render(); }));
   app.querySelector('#logoutBtn').addEventListener('click', doLogout);
   app.querySelector('#refreshBtn').addEventListener('click', async ()=>{ await refreshAll(); render(); toast('Dados recarregados','ok'); });
+  refreshBuildStamp();
 
   const content=document.getElementById('content');
   if(currentTab==='dashboard') content.innerHTML=renderDashboard();
