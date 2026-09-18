@@ -856,7 +856,8 @@ function attachProblemaDetailHandlers(content,p){
   const gsp=content.querySelector('#gotoSessaoProbBtn'); if(gsp) gsp.addEventListener('click',(e)=>{e.preventDefault();currentTab='sessoes';openDetail={type:'sessao',id:p.sessao_id};render();});
   const rec=content.querySelector('#recusarBtn'); if(rec) rec.addEventListener('click', async ()=>{ const statusAnt=p.status; const err=await updateRow('problemas',p.id,{status:'Recusado'}); if(err){toast('Erro','err');return;} await addStatusLog({problema_id:p.id},statusAnt,'Recusado'); await refreshAll(); render(); });
   const pr=content.querySelector('#promoteBtn'); if(pr) pr.addEventListener('click', async ()=>{
-    const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Nova',data:today(),problema:p.descricao||p.titulo,ganho_fin:0,ganho_op:0,custo:0};
+    const impHerdados=parseIntensidades(p.impactos_json);
+    const novo={problema_id:p.id,titulo:p.titulo,area:p.area||null,dono:null,status:'Nova',data:today(),problema:p.descricao||p.titulo,impactos_json:impHerdados,esforco:Number(p.esforco)||1,bucket:Object.keys(impHerdados).join(', ')||null,ganho_fin:0,ganho_op:0,custo:0};
     const {data,error}=await insertRow('iniciativas',novo);
     if(error){toast('Erro ao promover','err');console.error(error);return;}
     const statusAnt = p.status;
