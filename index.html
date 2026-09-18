@@ -240,6 +240,23 @@ const INTENSIDADES = [[0,'Nenhum'],[1,'Baixo'],[2,'Médio'],[3,'Alto']];
 const ESFORCOS = [[1,'Baixo'],[2,'Médio'],[3,'Alto']];
 const ESFORCO_LABEL = {1:'Baixo',2:'Médio',3:'Alto'};
 
+/* ===== ABORDAGENS (como a iniciativa será resolvida) ===== */
+// Fallback usado só se a tabela `abordagens` ainda não existir/carregar.
+const ABORDAGENS_SEED = [
+  {nome:'Desenvolvimento com IA',        ordem:1, ativo:true},
+  {nome:'Solução de mercado (compra)',   ordem:2, ativo:true},
+  {nome:'Desenvolvimento interno (sem IA)',ordem:3, ativo:true},
+  {nome:'Melhoria de processo',          ordem:4, ativo:true},
+  {nome:'Automação (RPA/no-code)',       ordem:5, ativo:true},
+  {nome:'Contratação / alocação de pessoas',ordem:6, ativo:true},
+  {nome:'Não resolver / arquivar',       ordem:7, ativo:true}
+];
+function abordagensAtivas(){
+  const list=(cache.abordagens||[]).filter(a=>a.ativo!==false);
+  const base=list.length?list:ABORDAGENS_SEED;
+  return [...base].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+}
+
 // Lista de impactos ativos (do cache, ordenados); cai no seed se vazio
 function impactosAtivos(){
   const list=(cache.impactos||[]).filter(i=>i.ativo!==false);
@@ -296,7 +313,7 @@ const FORMATOS = ['Priorização semanal','Demo de caso','Exploração de técni
 /* ===================== ESTADO ===================== */
 let session = null;          // sessão Supabase Auth (admin logado)
 let isAdmin = false;         // usuário logado consta em `admins`?
-let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [], impactos: [] };
+let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [], impactos: [], abordagens: [] };
 let currentTab = 'dashboard';
 let filterStatus = 'Nova';
 let filterProbStatus = 'Novo';
@@ -304,6 +321,7 @@ let openForm = null;
 let openDetail = null;
 let impBuffer = { intensidades:{}, esforco:1 }; // buffer do formulário público
 let openImpForm = null; // null | 'new' | id do impacto em edição
+let openAboForm = null; // null | 'new' | id da abordagem em edição
 let publicView = 'form';     // tela pública: 'form' | 'sent'
 let busy = false;
 
@@ -365,12 +383,13 @@ function today(){ return new Date().toISOString().slice(0,10); }
 /* ===================== DATA LAYER (Supabase) ===================== */
 async function refreshAll(){
   if(!sb) return;
-  const [pr, ini, ses, com, imp] = await Promise.all([
+  const [pr, ini, ses, com, imp, abo] = await Promise.all([
     sb.from('problemas').select('*'),
     sb.from('iniciativas').select('*'),
     sb.from('sessoes').select('*'),
     sb.from('comentarios').select('*').order('criado_em',{ascending:true}),
-    sb.from('impactos').select('*')
+    sb.from('impactos').select('*'),
+    sb.from('abordagens').select('*')
   ]);
   if(pr.error && pr.error.code!=='42501') console.error(pr.error);
   cache.problemas   = pr.data   || [];
@@ -378,6 +397,7 @@ async function refreshAll(){
   cache.sessoes     = ses.data  || [];
   cache.comentarios = com.data  || [];
   cache.impactos    = (imp && imp.data) || [];
+  cache.abordagens  = (abo && abo.data) || [];
 }
 
 async function insertProblemaPublic(payload){
@@ -646,11 +666,11 @@ function renderAdminApp(){
       <button data-tab="problemas" class="${currentTab==='problemas'?'active':''}">${iconInbox()} Problemas ${novos?`<span class="count-dot">${novos}</span>`:''}</button>
       <button data-tab="iniciativas" class="${currentTab==='iniciativas'?'active':''}">${iconRocket()} Iniciativas ${novasIni?`<span class="count-dot">${novasIni}</span>`:''}</button>
       <button data-tab="sessoes" class="${currentTab==='sessoes'?'active':''}">${iconCal()} Sessões</button>
-      <button data-tab="impactos" class="${currentTab==='impactos'?'active':''}">${iconSliders()} Impactos</button>
+      <button data-tab="impactos" class="${currentTab==='impactos'?'active':''}">${iconSliders()} Configurações</button>
     </div>
     <div id="content"></div>
     <footer><button id="refreshBtn">recarregar dados</button></footer>`;
-  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; openImpForm=null; render(); }));
+  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; openImpForm=null; openAboForm=null; render(); }));
   app.querySelector('#logoutBtn').addEventListener('click', doLogout);
   app.querySelector('#refreshBtn').addEventListener('click', async ()=>{ await refreshAll(); render(); toast('Dados recarregados','ok'); });
   refreshBuildStamp();
@@ -713,6 +733,56 @@ function renderImpactosTab(content){
       busy=false;
       if(err){ toast('Erro ao salvar','err'); console.error(err); b.disabled=false; return; }
       openImpForm=null; await refreshAll(); render(); toast('Salvo','ok');
+    });
+  }
+
+  // ---------- Seção: Abordagens de resolução ----------
+  const aboList=[...(cache.abordagens||[])].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+  const aboEditing = openAboForm && openAboForm!=='new' ? aboList.find(a=>a.id===openAboForm) : null;
+
+  let ahtml=`<div class="top-actions" style="margin-top:30px"><div><div class="section-title" style="margin:0">Abordagens de resolução</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">Como uma iniciativa priorizada será tratada (uso de IA, compra de mercado, melhoria de processo, etc.).</div></div><button class="btn" id="newAboBtn">+ Nova abordagem</button></div>`;
+
+  if(openAboForm){
+    const e=aboEditing||{nome:'',ordem:(aboList.length?Math.max(...aboList.map(a=>a.ordem||0))+1:1),ativo:true};
+    ahtml+=`<div class="form-panel"><div class="section-title">${aboEditing?'Editar abordagem':'Nova abordagem'}</div><form id="aboForm">
+      <div class="field-row"><div class="field"><label>Nome</label><input name="nome" required value="${esc(e.nome)}" placeholder="Ex: Desenvolvimento com IA"></div><div class="field" style="max-width:140px"><label>Ordem</label><input name="ordem" type="number" min="0" step="1" value="${e.ordem||0}"></div></div>
+      ${aboEditing?`<div class="field"><label><input type="checkbox" name="ativo" ${e.ativo!==false?'checked':''} style="width:15px;height:15px;margin-right:8px;vertical-align:-2px">Ativa <span class="hint">— abordagens inativas não aparecem no formulário, mas o histórico é preservado</span></label></div>`:''}
+      <div class="btn-row"><button type="submit" class="btn" id="saveAbo">Salvar</button><button type="button" class="btn btn-ghost" id="cancelAbo">Cancelar</button></div>
+    </form></div>`;
+  }
+
+  ahtml+=`<div class="card">`;
+  if(!aboList.length){
+    ahtml+=`<div style="font-size:13px;color:var(--text-muted);padding:8px 4px">Nenhuma abordagem cadastrada ainda. Use "+ Nova abordagem" para começar. A migração SQL já semeia uma lista sugerida.</div>`;
+  } else {
+    ahtml+=aboList.map(a=>`<div class="list-row" style="cursor:default"><div class="list-row-body"><div class="list-row-title" style="font-size:14px">${esc(a.nome)} ${a.ativo===false?'<span class="badge" style="background:var(--slate-soft);color:var(--slate)">inativa</span>':''}</div><div class="list-row-meta"><span>ordem ${a.ordem||0}</span></div></div><div class="btn-row" style="margin:0"><button class="btn btn-ghost abo-edit" data-id="${a.id}">Editar</button><button class="btn btn-ghost abo-toggle" data-id="${a.id}">${a.ativo===false?'Ativar':'Desativar'}</button></div></div>`).join('');
+  }
+  ahtml+=`</div>`;
+  content.insertAdjacentHTML('beforeend', ahtml);
+
+  const anb=content.querySelector('#newAboBtn'); if(anb) anb.addEventListener('click',()=>{openAboForm='new';render();});
+  content.querySelectorAll('.abo-edit').forEach(b=>b.addEventListener('click',()=>{openAboForm=b.dataset.id;render();}));
+  content.querySelectorAll('.abo-toggle').forEach(b=>b.addEventListener('click',async()=>{
+    const abo=aboList.find(a=>a.id===b.dataset.id); if(!abo)return;
+    const err=await updateRow('abordagens',abo.id,{ativo:abo.ativo===false});
+    if(err){toast('Erro ao atualizar','err');console.error(err);return;}
+    await refreshAll();render();toast('Atualizado','ok');
+  }));
+
+  const aform=content.querySelector('#aboForm');
+  if(aform){
+    content.querySelector('#cancelAbo').addEventListener('click',()=>{openAboForm=null;render();});
+    aform.addEventListener('submit',async(e)=>{
+      e.preventDefault(); if(busy)return; busy=true;
+      const b=content.querySelector('#saveAbo'); b.disabled=true;
+      const fd=new FormData(aform);const d=Object.fromEntries(fd.entries());
+      const payload={nome:(d.nome||'').trim(),ordem:Number(d.ordem)||0};
+      let err;
+      if(aboEditing){ payload.ativo=aform.querySelector('[name="ativo"]')?aform.querySelector('[name="ativo"]').checked:true; err=await updateRow('abordagens',aboEditing.id,payload); }
+      else { payload.ativo=true; err=(await insertRow('abordagens',payload)).error; }
+      busy=false;
+      if(err){ toast('Erro ao salvar','err'); console.error(err); b.disabled=false; return; }
+      openAboForm=null; await refreshAll(); render(); toast('Salvo','ok');
     });
   }
 }
@@ -927,7 +997,7 @@ function casoFormHtml(editing){
     <div class="field-row-3"><div class="field"><label>Ganho financeiro <span class="hint">R$/mês</span></label><input type="text" inputmode="decimal" data-mask="money" name="ganho_fin" value="${esc(c.ganho_fin!=null?fmtNum(c.ganho_fin,2):'')}" placeholder="0,00"></div><div class="field"><label>Ganho operacional <span class="hint">h/mês</span></label><input type="text" inputmode="numeric" data-mask="int" name="ganho_op" value="${esc(c.ganho_op!=null?fmtNum(c.ganho_op,0):'')}" placeholder="0"></div><div class="field"><label>Custo <span class="hint">R$ total</span></label><input type="text" inputmode="decimal" data-mask="money" name="custo" value="${esc(c.custo!=null?fmtNum(c.custo,2):'')}" placeholder="0,00"></div></div>
     <div class="divider"></div><div class="section-title">Impacto e esforço</div>
     <div class="field"><label>Impacto estimado <span class="hint">— o quanto cada ganho se aplica</span></label>${impactoIntensidadeHtml(c)}</div>
-    <div class="field" style="max-width:280px"><label>Esforço estimado</label><select name="esforco">${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(c.esforco||1)===v?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="field-row"><div class="field"><label>Esforço estimado</label><select name="esforco">${ESFORCOS.map(([v,l])=>`<option value="${v}" ${Number(c.esforco||1)===v?'selected':''}>${l}</option>`).join('')}</select></div><div class="field"><label>Abordagem de resolução <span class="hint">— como será tratada</span></label><select name="abordagem"><option value="">— selecionar —</option>${abordagensAtivas().map(a=>`<option ${normStatus(c.abordagem)===normStatus(a.nome)?'selected':''}>${esc(a.nome)}</option>`).join('')}${(c.abordagem&&!abordagensAtivas().some(a=>normStatus(a.nome)===normStatus(c.abordagem)))?`<option selected>${esc(c.abordagem)}</option>`:''}</select></div></div>
     <div class="field"><label>Resultado (texto)</label><input name="resultado" value="${esc(c.resultado)}"></div>
     <div class="field"><label>Decisão final</label><input name="decisao" value="${esc(c.decisao)}"></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveCaso">Salvar</button><button type="button" class="btn btn-ghost" id="cancelCaso">Cancelar</button></div>
@@ -942,7 +1012,7 @@ function attachCasoFormHandlers(content,editing){
     const b=content.querySelector('#saveCaso'); b.disabled=true;
     const fd=new FormData(form);const d=Object.fromEntries(fd.entries());
     const inten=collectIntensidades(form);
-    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,impactos_json:inten,esforco:Number(d.esforco)||1,bucket:Object.keys(inten).join(', ')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
+    const payload={titulo:d.titulo,area:d.area||null,dono:d.dono||null,status:d.status,data:d.data||null,problema:d.problema||null,testado:d.testado||null,impactos_json:inten,esforco:Number(d.esforco)||1,abordagem:d.abordagem||null,bucket:Object.keys(inten).join(', ')||null,resultado:d.resultado||null,decisao:d.decisao||null,ganho_fin:parseNum(d.ganho_fin),ganho_op:parseNum(d.ganho_op),custo:parseNum(d.custo)};
     let err;
     if(editing){
       const statusAnt = editing.status;
@@ -966,7 +1036,7 @@ function casoDetailHtml(c){
   return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editCasoBtn">Editar</button><button class="btn btn-ghost" id="closeCasoBtn">Voltar</button></div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k" style="font-family:var(--font-mono)">${esc(c.codigo||'')}</div><div class="v" style="font-family:var(--font-display);font-size:17px">${esc(c.titulo)}</div></div>
     <div class="hero-grid" style="margin-bottom:16px"><div class="hero-card fin"><div class="hero-label">Ganho financeiro</div><div class="hero-value">${gf>0?fmtMoney(gf):'—'}</div><div class="hero-sub">${gf>0?'por mês':'não informado'}</div></div><div class="hero-card op"><div class="hero-label">Ganho operacional</div><div class="hero-value">${go>0?fmtHoras(go):'—'}</div><div class="hero-sub">${go>0?'por mês':'não informado'}</div></div><div class="hero-card roi"><div class="hero-label">Payback</div><div class="hero-value">${pb}</div><div class="hero-sub">${cu>0?'Custo: '+fmtMoney(cu):'informe custo'}</div></div></div>
-    <div class="detail-grid"><div class="detail-field"><div class="k">Área</div><div class="v">${esc(c.area)||'—'}</div></div><div class="detail-field"><div class="k">Dono</div><div class="v">${esc(c.dono)||'—'}</div></div><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(c.data)}</div></div><div class="detail-field"><div class="k">Impactos</div><div class="v">${esc(impactosResumo(c))||'—'}</div></div>${prob?`<div class="detail-field"><div class="k">Problema de origem</div><div class="v"><a href="#" id="gotoProbBtn" style="color:var(--accent);text-decoration:none">${esc(prob.codigo)} · Score ${impactScore(prob).toFixed(1)}</a></div></div>`:''}<div class="detail-field"><div class="k">Sessão</div><div class="v">${ses?`<a href="#" id="gotoSessaoBtn" style="color:var(--accent);text-decoration:none">${esc(ses.codigo)} · ${fmtDate(ses.data)}</a>`:'—'}</div></div></div>
+    <div class="detail-grid"><div class="detail-field"><div class="k">Área</div><div class="v">${esc(c.area)||'—'}</div></div><div class="detail-field"><div class="k">Dono</div><div class="v">${esc(c.dono)||'—'}</div></div><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(c.data)}</div></div><div class="detail-field"><div class="k">Impactos</div><div class="v">${esc(impactosResumo(c))||'—'}</div></div><div class="detail-field"><div class="k">Abordagem</div><div class="v">${esc(c.abordagem)||'—'}</div></div>${prob?`<div class="detail-field"><div class="k">Problema de origem</div><div class="v"><a href="#" id="gotoProbBtn" style="color:var(--accent);text-decoration:none">${esc(prob.codigo)} · Score ${impactScore(prob).toFixed(1)}</a></div></div>`:''}<div class="detail-field"><div class="k">Sessão</div><div class="v">${ses?`<a href="#" id="gotoSessaoBtn" style="color:var(--accent);text-decoration:none">${esc(ses.codigo)} · ${fmtDate(ses.data)}</a>`:'—'}</div></div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Problema</div><div class="v">${esc(c.problema)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Solução implementada</div><div class="v">${esc(c.testado)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Resultado</div><div class="v">${esc(c.resultado)||'—'}</div></div>
