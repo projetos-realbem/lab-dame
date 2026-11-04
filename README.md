@@ -69,8 +69,11 @@ Priorizar/recusar só fica disponível quando o problema está vinculado a uma s
 
 ### Iniciativas
 
-`Priorizado` → `Em Implementação` → `Implementado`
+`Nova` → `Em Implementação` → `Implementado`
 (ou `Descartado` / `Em Pausa` a qualquer momento)
+
+O banco só aceita esses cinco status. Registros antigos com `Priorizado` são tratados
+pelo app como `Nova`.
 
 O vínculo de uma iniciativa a uma sessão é feito **exclusivamente pela aba Sessões**
 (não há mais campo de sessão dentro do formulário da iniciativa).
@@ -172,7 +175,7 @@ Os valores são gravados como número puro no banco.
 
 ```
 index.html                        App completo (UI + lógica)
-supabase-schema.sql               Schema, triggers e políticas RLS
+supabase-schema.sql               Schema, triggers e políticas RLS (espelho da produção)
 supabase/config.toml              Configuração mínima do Supabase CLI
 supabase/functions/usuarios/      Edge Function de gestão de usuários
 README.md
@@ -288,9 +291,13 @@ Nenhum acesso externo chega nela.
   select distinct status from problemas;
   select distinct status from iniciativas;
   ```
-- **Chave estrangeira de sessão (recomendado):** para robustez extra, deixe a coluna
-  `sessao_id` com `on delete set null`, servindo de rede de segurança caso uma sessão
-  seja apagada por fora da aplicação.
+- **Chave estrangeira de sessão:** `problemas.sessao_id` e `iniciativas.sessao_id` têm
+  `on delete set null`, rede de segurança caso uma sessão seja apagada por fora da
+  aplicação. Comentários são apagados junto com o item (`on delete cascade`).
+- **`supabase-schema.sql` é o espelho do banco de produção** (dump de 04/11/2026) e é
+  idempotente: pode ser rodado de novo para completar uma instalação antiga. Depois de
+  mudar o schema pelo painel, atualize o arquivo (`supabase db dump --linked --schema public`
+  com o Docker aberto) para o repositório não ficar para trás.
 
 ---
 
