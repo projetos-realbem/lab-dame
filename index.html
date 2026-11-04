@@ -193,8 +193,9 @@ footer button:hover{opacity:1;}
    ┌─────────────────────────────────────────────────────────────────┐
    │  ÚLTIMA ATUALIZAÇÃO DO SISTEMA — edite esta linha a cada deploy   │
    └─────────────────────────────────────────────────────────────────┘ */
-const BUILD_DATA = '2026-09-16 19:40';   // formato: AAAA-MM-DD HH:MM
-const BUILD_NOTA = 'impactos ponderados'; // descrição curta da mudança (opcional)
+// Só usado como reserva quando o servidor não informa Last-Modified (ex.: file://).
+// Em produção o rodapé mostra a data real do arquivo publicado, sem nota de versão.
+const BUILD_DATA = '2026-11-04 12:00';   // formato: AAAA-MM-DD HH:MM
 
 /* =====================================================================
    CONFIGURAÇÃO — vem de window.APP_CONFIG, definido em config.js
@@ -335,7 +336,7 @@ function fmtDate(d){ if(!d)return'—'; const [y,m,day]=String(d).split('-'); re
 let _buildDateCache = null; // Date do Last-Modified, preenchido uma vez
 function fmtBuild(){
   if(_buildDateCache) return fmtBuildFromDate(_buildDateCache);
-  const [dt,hr]=String(BUILD_DATA).trim().split(/\s+/); const [y,m,d]=(dt||'').split('-'); const dataBr=(y&&m&&d)?`${d}/${m}/${y}`:(dt||BUILD_DATA); const quando=hr?`${dataBr} às ${hr}`:dataBr; return `atualizado em ${quando}${BUILD_NOTA?' · '+BUILD_NOTA:''}`;
+  const [dt,hr]=String(BUILD_DATA).trim().split(/\s+/); const [y,m,d]=(dt||'').split('-'); const dataBr=(y&&m&&d)?`${d}/${m}/${y}`:(dt||BUILD_DATA); const quando=hr?`${dataBr} às ${hr}`:dataBr; return `atualizado em ${quando}`;
 }
 // formata um Date -> "atualizado em DD/MM/AAAA às HH:MM · nota"
 function fmtBuildFromDate(dtObj){
@@ -344,7 +345,7 @@ function fmtBuildFromDate(dtObj){
   const yy=dtObj.getFullYear();
   const hh=String(dtObj.getHours()).padStart(2,'0');
   const mi=String(dtObj.getMinutes()).padStart(2,'0');
-  return `atualizado em ${dd}/${mm}/${yy} às ${hh}:${mi}${BUILD_NOTA?' · '+BUILD_NOTA:''}`;
+  return `atualizado em ${dd}/${mm}/${yy} às ${hh}:${mi}`;
 }
 // busca a data real do arquivo servido (Last-Modified) uma vez, cacheia e
 // atualiza o rodapé; se falhar (ex.: file:// local) mantém o fallback manual
