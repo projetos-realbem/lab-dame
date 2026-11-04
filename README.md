@@ -33,7 +33,25 @@ Dashboard consolidado: R$/mês, h/mês, ROI anualizado
 | Perfil | O que pode fazer |
 |---|---|
 | Público (sem login) | Enviar um problema com classificação GUT |
-| Admin (login) | Ver fila, priorizar, gerenciar iniciativas e sessões, ver dashboard |
+| Admin (login) | Ver fila, priorizar, gerenciar iniciativas, sessões e usuários, ver dashboard |
+
+### Usuários (aba "Usuários")
+
+Os administradores são gerenciados dentro do próprio app, sem passar pelo painel do Supabase:
+
+- **Novo usuário**: informe o e-mail (e, se quiser, o nome). O sistema cria o login,
+  inclui o e-mail na tabela `admins` e mostra **uma única vez** uma senha provisória
+  (ex.: `Kp7m-Xq2a-9rTz`) para entregar pessoalmente. Se o e-mail já tinha login,
+  o acesso é reativado e uma senha provisória nova é gerada.
+- **Nova senha**: gera outra senha provisória para a pessoa (a atual deixa de valer).
+- **Bloquear / Desbloquear**: impede ou libera o login, sem tirar da `admins`.
+- **Remover**: tira da `admins` e bloqueia o login. A conta não é apagada; "Novo usuário"
+  com o mesmo e-mail reativa.
+- **Alterar minha senha** (cabeçalho): cada pessoa troca a própria senha. É assim que se
+  sai da senha provisória.
+
+Travas: ninguém age sobre a própria conta, e nunca fica menos de um administrador ativo.
+O projeto não envia e-mail; toda senha é entregue em mãos.
 
 ---
 
@@ -143,6 +161,8 @@ Os valores são gravados como número puro no banco.
 
 - **Frontend:** HTML + CSS + JS vanilla — arquivo único (`index.html`), sem build
 - **Backend:** [Supabase](https://supabase.com) — Postgres + Auth + RLS
+- **Edge Function `usuarios`:** gestão de usuários (precisa da chave de serviço, por isso
+  roda no Supabase e não no navegador)
 - **Hospedagem:** GitHub Pages (repositório privado)
 - **Auth:** Email + senha via Supabase Auth (somente admins cadastrados)
 
@@ -151,11 +171,32 @@ Os valores são gravados como número puro no banco.
 ## Estrutura do repositório
 
 ```
-index.html              App completo (UI + lógica)
-config.example.js       Modelo de config sem credenciais
-supabase-schema.sql     Schema, triggers e políticas RLS
+index.html                        App completo (UI + lógica)
+supabase-schema.sql               Schema, triggers e políticas RLS
+supabase/config.toml              Configuração mínima do Supabase CLI
+supabase/functions/usuarios/      Edge Function de gestão de usuários
 README.md
 ```
+
+## Publicar a Edge Function `usuarios`
+
+Sempre que `supabase/functions/usuarios/index.ts` mudar, publique antes de fazer o merge
+do site (a aba Usuários chama a função em produção). Pré-requisito: [Supabase CLI](https://supabase.com/docs/guides/local-development).
+
+```bash
+supabase login
+```
+
+```bash
+supabase functions deploy usuarios --project-ref gcdrjkqexfbuenpkvovo
+```
+
+A função usa `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, que o Supabase injeta sozinho.
+Ela só atende quem tem sessão válida **e** e-mail na tabela `admins`, e aceita chamadas
+apenas de `https://robertocassianoteixeira.github.io` e de `localhost`.
+
+Para testar o `index.html` localmente, sirva a pasta por HTTP (ex.: `npx serve .`) e
+abra `http://localhost:3000`. Abrir o arquivo direto (`file://`) não funciona com a função.
 
 ---
 
@@ -201,19 +242,19 @@ git push -u origin main
 
 ---
 
-## Como adicionar um admin
+## Como adicionar ou remover um admin
 
-1. **Authentication → Users → Add user** no Supabase (marque Auto Confirm User).
+Pela aba **Usuários** do app (ver "Acesso" acima). O caminho manual pelo painel do
+Supabase continua valendo como plano B:
+
+1. **Authentication → Users → Add user** (marque Auto Confirm User).
 2. SQL Editor:
    ```sql
    insert into public.admins (email) values ('novo@empresa.com');
    ```
 
-## Como remover um admin
-
-```sql
-delete from public.admins where email = 'email@empresa.com';
-```
+Para remover manualmente: `delete from public.admins where email = 'email@empresa.com';`
+e, em **Authentication → Users**, bloqueie (Ban) o usuário.
 
 ---
 
