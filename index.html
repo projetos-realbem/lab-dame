@@ -324,6 +324,10 @@ let openImpForm = null; // null | 'new' | id do impacto em edição
 let openAboForm = null; // null | 'new' | id da abordagem em edição
 let publicView = 'form';     // tela pública: 'form' | 'sent'
 let busy = false;
+let usuarios = null;         // lista da aba Usuários (vem da Edge Function); null = ainda não carregada
+let openUsuForm = false;     // formulário "Novo usuário" aberto?
+let senhaProvisoria = null;  // {email, senha} mostrada UMA vez após criar/gerar senha
+let openMinhaSenha = false;  // painel "alterar minha senha" aberto?
 
 /* ===================== HELPERS ===================== */
 function esc(s){ if(s===undefined||s===null)return''; return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -505,7 +509,36 @@ async function doLogout(){
   await sb.auth.signOut();
   session = null; isAdmin = false;
   currentTab='dashboard'; openForm=null; openDetail=null;
+  usuarios=null; openUsuForm=false; senhaProvisoria=null; openMinhaSenha=false;
   render();
+}
+
+/* ===================== USUÁRIOS (Edge Function) ===================== */
+// Chama a função `usuarios` com a sessão do admin. Devolve {dados, erro}:
+// erro é a mensagem em português vinda da função (ou de rede).
+async function chamarUsuarios(body){
+  try{
+    const { data: s } = await sb.auth.getSession();
+    const token = s && s.session ? s.session.access_token : null;
+    if(!token) return { erro: 'Sessão expirada. Entre de novo.' };
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/usuarios`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey: SUPABASE_ANON_KEY, Authorization:`Bearer ${token}` },
+      body: JSON.stringify(body||{})
+    });
+    const dados = await r.json().catch(()=>({}));
+    if(!r.ok) return { erro: dados.erro || `Falha na função de usuários (HTTP ${r.status}).` };
+    return { dados };
+  }catch(e){
+    console.error(e);
+    return { erro: 'Não foi possível falar com a função de usuários. Ela está publicada?' };
+  }
+}
+async function carregarUsuarios(){
+  const { dados, erro } = await chamarUsuarios({ acao:'listar' });
+  if(erro){ usuarios = []; return erro; }
+  usuarios = dados.usuarios || [];
+  return null;
 }
 
 /* ===================== ÍCONES ===================== */
@@ -516,6 +549,8 @@ function iconRocket(){return `<svg viewBox="0 0 24 24" fill="none" stroke="curre
 function iconCal(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;}
 function iconSliders(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>`;}
 function iconLock(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;}
+function iconUsers(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;}
+function iconKey(){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`;}
 
 /* ===================== BOOT / ROOT RENDER ===================== */
 async function boot(){
@@ -658,7 +693,7 @@ function renderAdminApp(){
     <div class="header">
       ${flaskIcon(26)}
       <div class="grow"><h1>Cultura de IA — Gestão de Iniciativas</h1><p>Captação · priorização por impacto · sessões semanais · ganhos</p></div>
-      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="logoutBtn">sair</button><br><span class="email" id="buildStamp" style="opacity:.5;font-size:10px">${fmtBuild()}</span></div>
+      <div class="who">admin<br><span class="email">${esc(session?.user?.email||'')}</span><br><button class="link-btn" id="minhaSenhaBtn">alterar minha senha</button> · <button class="link-btn" id="logoutBtn">sair</button><br><span class="email" id="buildStamp" style="opacity:.5;font-size:10px">${fmtBuild()}</span></div>
     </div>
     <div class="nav">
       <button data-tab="dashboard" class="${currentTab==='dashboard'?'active':''}">${iconDash()} Dashboard</button>
@@ -666,11 +701,13 @@ function renderAdminApp(){
       <button data-tab="iniciativas" class="${currentTab==='iniciativas'?'active':''}">${iconRocket()} Iniciativas ${novasIni?`<span class="count-dot">${novasIni}</span>`:''}</button>
       <button data-tab="sessoes" class="${currentTab==='sessoes'?'active':''}">${iconCal()} Sessões</button>
       <button data-tab="impactos" class="${currentTab==='impactos'?'active':''}">${iconSliders()} Configurações</button>
+      <button data-tab="usuarios" class="${currentTab==='usuarios'?'active':''}">${iconUsers()} Usuários</button>
     </div>
     <div id="content"></div>
     <footer><button id="refreshBtn">recarregar dados</button></footer>`;
-  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; openImpForm=null; openAboForm=null; render(); }));
+  app.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{ currentTab=b.dataset.tab; openForm=null; openDetail=null; openImpForm=null; openAboForm=null; openUsuForm=false; openMinhaSenha=false; render(); }));
   app.querySelector('#logoutBtn').addEventListener('click', doLogout);
+  app.querySelector('#minhaSenhaBtn').addEventListener('click', ()=>{ openMinhaSenha=!openMinhaSenha; render(); });
   app.querySelector('#refreshBtn').addEventListener('click', async ()=>{ await refreshAll(); render(); toast('Dados recarregados','ok'); });
   refreshBuildStamp();
 
@@ -680,6 +717,144 @@ function renderAdminApp(){
   if(currentTab==='iniciativas') renderIniciativasTab(content);
   if(currentTab==='sessoes') renderSessoesTab(content);
   if(currentTab==='impactos') renderImpactosTab(content);
+  if(currentTab==='usuarios') renderUsuariosTab(content);
+  if(openMinhaSenha) renderMinhaSenha(content);
+}
+
+/* ===================== USUÁRIOS (admin) ===================== */
+function fmtAcesso(ts){
+  if(!ts) return 'nunca entrou';
+  const d=new Date(ts); const hoje=new Date();
+  const hora=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if(d.toDateString()===hoje.toDateString()) return `último acesso hoje ${hora}`;
+  const ontem=new Date(hoje); ontem.setDate(hoje.getDate()-1);
+  if(d.toDateString()===ontem.toDateString()) return `último acesso ontem ${hora}`;
+  return `último acesso ${d.toLocaleDateString('pt-BR')}`;
+}
+
+function renderUsuariosTab(content){
+  if(usuarios===null){
+    content.innerHTML=`<div class="card" style="color:var(--text-muted);font-size:13px">Carregando usuários…</div>`;
+    carregarUsuarios().then(err=>{ if(err) toast(err,'err'); if(currentTab==='usuarios') render(); });
+    return;
+  }
+  const meuId = session?.user?.id;
+  const ativos = usuarios.filter(u=>u.admin&&!u.bloqueado).length;
+  const bloqueados = usuarios.filter(u=>u.bloqueado).length;
+  const semAcesso = usuarios.filter(u=>!u.admin).length;
+  const resumo = [`${ativos} ativo${ativos===1?'':'s'}`, bloqueados?`${bloqueados} bloqueado${bloqueados===1?'':'s'}`:null, semAcesso?`${semAcesso} sem acesso`:null].filter(Boolean).join(' · ');
+
+  let html=`<div class="top-actions"><div><div class="section-title" style="margin:0">Usuários · ${resumo}</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px">Quem pode entrar como administrador. Senhas são provisórias: a pessoa troca a dela em "alterar minha senha".</div></div><button class="btn" id="newUsuBtn">+ Novo usuário</button></div>`;
+
+  if(openUsuForm){
+    html+=`<div class="form-panel"><div class="section-title">Novo usuário</div><form id="usuForm">
+      <div class="field-row">
+        <div class="field"><label>E-mail</label><input name="email" type="email" required placeholder="nome@realbem.com.br" autocomplete="off"></div>
+        <div class="field"><label>Nome <span class="hint">— opcional</span></label><input name="nome" placeholder="Como aparece na lista" autocomplete="off"></div>
+      </div>
+      <div class="btn-row"><button type="submit" class="btn" id="saveUsu">${iconKey()} Cadastrar e gerar senha</button><button type="button" class="btn btn-ghost" id="cancelUsu">Cancelar</button><span style="font-size:11.5px;color:var(--slate);align-self:center">A senha provisória aparece uma vez; entregue pessoalmente.</span></div>
+    </form></div>`;
+  }
+
+  if(senhaProvisoria){
+    html+=`<div class="form-panel" style="background:var(--accent-soft);border-color:var(--accent);display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span style="color:var(--accent);display:inline-flex">${iconKey()}</span>
+      <div style="flex:1;min-width:200px"><div style="font-weight:600;font-size:13.5px">Senha provisória de ${esc(senhaProvisoria.email)}</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px">Mostrada só agora. A pessoa troca em "alterar minha senha" depois de entrar.</div></div>
+      <code id="senhaProv" style="font-family:var(--font-mono);font-size:16px;color:var(--accent);letter-spacing:.04em;user-select:all">${esc(senhaProvisoria.senha)}</code>
+      <button type="button" class="btn btn-ghost" id="copiarSenha">Copiar</button>
+      <button type="button" class="btn btn-ghost" id="fecharSenha" title="Fechar">×</button>
+    </div>`;
+  }
+
+  html+=`<div class="card">`;
+  if(!usuarios.length){
+    html+=`<div style="font-size:13px;color:var(--text-muted);padding:8px 4px">Nenhum usuário encontrado.</div>`;
+  } else {
+    html+=usuarios.map(u=>{
+      const eu = u.id===meuId;
+      const cor = u.bloqueado?'var(--rose)':(u.admin?'var(--green)':'var(--slate)');
+      const badge = u.bloqueado
+        ? `<span class="badge" style="background:var(--rose-soft);color:var(--rose)">bloqueado</span>`
+        : (u.admin ? `<span class="badge" style="background:var(--green-soft);color:var(--green)">ativo</span>`
+                   : `<span class="badge" style="background:var(--slate-soft);color:var(--slate)">sem acesso</span>`);
+      let acoes;
+      if(eu) acoes=`<span style="font-size:11.5px;color:var(--slate)">sem ações sobre si mesmo</span>`;
+      else if(!u.admin) acoes=`<button class="btn btn-ghost usu-act" data-acao="reativar" data-id="${u.id}" data-email="${esc(u.email)}">Dar acesso</button>`;
+      else if(u.bloqueado) acoes=`<button class="btn btn-ghost usu-act" data-acao="desbloquear" data-id="${u.id}" data-email="${esc(u.email)}">Desbloquear</button><button class="btn btn-ghost usu-act" data-acao="remover" data-id="${u.id}" data-email="${esc(u.email)}" style="color:var(--rose)">Remover</button>`;
+      else acoes=`<button class="btn btn-ghost usu-act" data-acao="nova_senha" data-id="${u.id}" data-email="${esc(u.email)}">${iconKey()} Nova senha</button><button class="btn btn-ghost usu-act" data-acao="bloquear" data-id="${u.id}" data-email="${esc(u.email)}">${iconLock()} Bloquear</button><button class="btn btn-ghost usu-act" data-acao="remover" data-id="${u.id}" data-email="${esc(u.email)}" style="color:var(--rose)">Remover</button>`;
+      return `<div class="list-row" style="cursor:default;align-items:center${u.bloqueado?';opacity:.85':''}"><div class="status-bar" style="background:${cor}"></div>
+        <div class="list-row-body"><div class="list-row-title" style="font-size:13.5px">${esc(u.email)}${u.nome?` <span style="color:var(--text-muted);font-weight:400">· ${esc(u.nome)}</span>`:''}</div>
+        <div class="list-row-meta">${badge}${eu?`<span class="badge" style="background:var(--violet-soft);color:var(--violet)">você</span>`:''}<span>${fmtAcesso(u.ultimo_acesso)}</span></div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${acoes}</div></div>`;
+    }).join('');
+  }
+  html+=`</div>`;
+  content.innerHTML=html;
+
+  const nb=content.querySelector('#newUsuBtn'); if(nb) nb.addEventListener('click',()=>{openUsuForm=true;render();});
+  const cs=content.querySelector('#copiarSenha'); if(cs) cs.addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText(senhaProvisoria.senha); toast('Senha copiada','ok'); }catch(_){ toast('Selecione e copie a senha manualmente','err'); } });
+  const fs=content.querySelector('#fecharSenha'); if(fs) fs.addEventListener('click',()=>{ senhaProvisoria=null; render(); });
+
+  const form=content.querySelector('#usuForm');
+  if(form){
+    content.querySelector('#cancelUsu').addEventListener('click',()=>{openUsuForm=false;render();});
+    form.addEventListener('submit',async(e)=>{
+      e.preventDefault(); if(busy)return; busy=true;
+      const b=content.querySelector('#saveUsu'); b.disabled=true;
+      const fd=new FormData(form);
+      const email=String(fd.get('email')||'').trim().toLowerCase(); const nome=String(fd.get('nome')||'').trim();
+      const { dados, erro } = await chamarUsuarios({ acao:'criar', email, nome: nome||undefined });
+      busy=false;
+      if(erro){ toast(erro,'err'); b.disabled=false; return; }
+      openUsuForm=false; senhaProvisoria={ email, senha: dados.senha_provisoria };
+      await carregarUsuarios(); render(); toast(dados.novo?'Usuário cadastrado':'Acesso reativado','ok');
+    });
+  }
+
+  content.querySelectorAll('.usu-act').forEach(b=>b.addEventListener('click',async()=>{
+    if(busy)return;
+    const acao=b.dataset.acao, id=b.dataset.id, email=b.dataset.email;
+    const avisos={
+      nova_senha:`Gerar uma senha provisória nova para ${email}? A senha atual deixa de valer na hora.`,
+      bloquear:`Bloquear ${email}? A pessoa não consegue mais entrar até ser desbloqueada.`,
+      remover:`Remover ${email} dos administradores e bloquear o login? Dá para reativar depois em "Novo usuário".`
+    };
+    if(avisos[acao] && !confirm(avisos[acao])) return;
+    busy=true; b.disabled=true;
+    const body = acao==='reativar' ? { acao:'criar', email } : { acao, id };
+    const { dados, erro } = await chamarUsuarios(body);
+    busy=false;
+    if(erro){ toast(erro,'err'); b.disabled=false; return; }
+    if(dados.senha_provisoria) senhaProvisoria={ email, senha: dados.senha_provisoria };
+    const msgs={ nova_senha:'Senha provisória gerada', bloquear:'Usuário bloqueado', desbloquear:'Usuário desbloqueado', remover:'Acesso removido', reativar:'Acesso reativado' };
+    await carregarUsuarios(); render(); toast(msgs[acao]||'Feito','ok');
+  }));
+}
+
+// Painel "alterar minha senha" (qualquer aba): a pessoa logada troca a própria senha.
+function renderMinhaSenha(content){
+  const painel=document.createElement('div');
+  painel.className='form-panel';
+  painel.innerHTML=`<div class="section-title">Alterar minha senha</div><form id="minhaSenhaForm">
+    <div class="field-row">
+      <div class="field"><label>Senha nova <span class="hint">— mínimo 8 caracteres</span></label><input name="senha" type="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="field"><label>Repita a senha nova</label><input name="confirma" type="password" required minlength="8" autocomplete="new-password"></div>
+    </div>
+    <div class="btn-row"><button type="submit" class="btn" id="salvarMinhaSenha">${iconLock()} Salvar senha</button><button type="button" class="btn btn-ghost" id="cancelMinhaSenha">Cancelar</button></div>
+  </form>`;
+  content.prepend(painel);
+  painel.querySelector('#cancelMinhaSenha').addEventListener('click',()=>{ openMinhaSenha=false; render(); });
+  painel.querySelector('#minhaSenhaForm').addEventListener('submit',async(e)=>{
+    e.preventDefault(); if(busy)return;
+    const fd=new FormData(e.target); const senha=String(fd.get('senha')||''); const confirma=String(fd.get('confirma')||'');
+    if(senha.length<8){ toast('A senha precisa ter pelo menos 8 caracteres','err'); return; }
+    if(senha!==confirma){ toast('As senhas não conferem','err'); return; }
+    busy=true; const b=painel.querySelector('#salvarMinhaSenha'); b.disabled=true;
+    const { error } = await sb.auth.updateUser({ password: senha });
+    busy=false;
+    if(error){ toast(error.message||'Não foi possível alterar a senha','err'); b.disabled=false; return; }
+    openMinhaSenha=false; render(); toast('Senha alterada','ok');
+  });
 }
 
 /* ===================== IMPACTOS (admin) ===================== */

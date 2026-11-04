@@ -1,0 +1,8 @@
+# Configuração mínima para o Supabase CLI publicar as Edge Functions.
+# O projeto de produção é o "labdame" (ref gcdrjkqexfbuenpkvovo).
+project_id = "labdame"
+
+[functions.usuarios]
+# O gateway exige um JWT válido do Supabase Auth; a função ainda confere
+# se o chamador está na tabela `admins`.
+verify_jwt = true
