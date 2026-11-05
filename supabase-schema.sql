@@ -2,7 +2,8 @@
 -- LAB DAME — CULTURA DE IA — Schema + RLS para Supabase
 -- Rode este script inteiro no SQL Editor do Supabase.
 --
--- Espelha o schema `public` do projeto de produção (dump de 04/11/2026).
+-- Espelha o schema `public` do projeto de produção (dump de 04/11/2026,
+-- mais a remoção das colunas GUT de 05/11/2026).
 -- É idempotente: pode ser rodado num projeto vazio ou por cima de uma
 -- instalação antiga (cria o que falta e não mexe no que já existe).
 -- ============================================================
@@ -64,11 +65,7 @@ create table if not exists public.problemas (
   solicitante   text not null,
   area          text not null,
   descricao     text not null,
-  impacto       text not null,              -- categorias marcadas, separadas por vírgula
-  gravidade     int  check (gravidade between 1 and 5),
-  urgencia      int  check (urgencia  between 1 and 5),
-  tendencia     int  check (tendencia between 1 and 5),
-  gut           int  generated always as (coalesce(gravidade,0)*coalesce(urgencia,0)*coalesce(tendencia,0)) stored,
+  impacto       text not null,              -- nomes dos impactos marcados (texto legado)
   status        text not null default 'Novo'
                   check (status in ('Novo','Em Análise','Priorizado','Recusado')),
   sessao_id     uuid references public.sessoes(id) on delete set null,
@@ -81,6 +78,13 @@ create table if not exists public.problemas (
 alter table public.problemas add column if not exists sessao_id     uuid references public.sessoes(id) on delete set null;
 alter table public.problemas add column if not exists esforco       int;
 alter table public.problemas add column if not exists impactos_json jsonb not null default '{}'::jsonb;
+
+-- Colunas da Matriz GUT, removidas em 05/11/2026 (o app usa o score de impacto;
+-- ver supabase/migrations/20261105_remover_colunas_gut.sql)
+alter table public.problemas drop column if exists gut;
+alter table public.problemas drop column if exists gravidade;
+alter table public.problemas drop column if exists urgencia;
+alter table public.problemas drop column if exists tendencia;
 create index if not exists idx_problemas_sessao_id on public.problemas (sessao_id);
 
 -- Iniciativas (problemas priorizados em andamento)
