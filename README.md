@@ -1,7 +1,8 @@
 # Lab Dame — Cultura de IA · Gestão de Iniciativas
 
 Sistema interno para estruturar a implantação da cultura de IA na empresa.
-Permite captar problemas de qualquer colaborador, priorizá-los pela **Matriz GUT**,
+Permite captar problemas de qualquer colaborador, priorizá-los por um **score de impacto
+ponderado** (peso × intensidade ÷ esforço),
 conduzir sessões semanais de priorização e acompanhar as iniciativas com seus
 ganhos financeiros e operacionais.
 
@@ -12,7 +13,7 @@ ganhos financeiros e operacionais.
 ```
 Colaborador envia problema (público, sem login)
         ↓
-Fila priorizada por score GUT (G × U × T) — status inicial: Novo
+Fila priorizada pelo score de impacto (Σ peso × intensidade ÷ esforço) — status inicial: Novo
         ↓
 Sessão semanal → problema é vinculado à sessão para análise
         ↓
@@ -32,7 +33,7 @@ Dashboard consolidado: R$/mês, h/mês, ROI anualizado
 
 | Perfil | O que pode fazer |
 |---|---|
-| Público (sem login) | Enviar um problema com classificação GUT |
+| Público (sem login) | Enviar um problema informando a intensidade de cada impacto |
 | Admin (login) | Ver fila, priorizar, gerenciar iniciativas, sessões e usuários, ver dashboard |
 
 ### Usuários (aba "Usuários")
@@ -85,42 +86,64 @@ O vínculo de uma iniciativa a uma sessão é feito **exclusivamente pela aba Se
 - Título
 - Nome do solicitante
 - Área / setor
-- Gravidade, Urgência e Tendência (Matriz GUT)
-- **Impacto estimado** — uma ou mais categorias de ganho (ver abaixo)
+- Descrição da dor
+- **Impacto estimado** — intensidade de cada impacto cadastrado (ver abaixo); ao menos
+  um precisa estar acima de "Nenhum"
 
-Descrição da dor é opcional, mas ajuda na priorização.
-
----
-
-## Categorias de impacto
-
-Tanto o **Impacto estimado** do problema quanto a **Categoria de impacto** da iniciativa
-usam a mesma lista de categorias, selecionadas por **caixas de seleção (múltipla escolha)**:
-
-- Tempo economizado
-- Custo reduzido
-- Solução construída internamente
-- Qualidade de entrega
-- Velocidade de decisão
-- Redução de risco ou inadimplência
-- Geração de receita ou conversão
-
-As categorias marcadas são gravadas como texto separado por vírgula nos campos
-`problemas.impacto` e `iniciativas.bucket`. O dashboard conta cada iniciativa em
-**todas** as categorias que ela marcou.
+O **esforço** não é pedido ao colaborador: o admin define ao editar o problema
+(normalmente na sessão). Até lá o score é calculado com esforço 1.
 
 ---
 
-## Matriz GUT
+## Impactos e pesos
 
-Score = G × U × T (máximo 125). A fila é ordenada automaticamente do maior para o menor score.
+Os impactos são cadastrados na tabela `impactos` e gerenciados pelo admin na aba
+**Configurações** (nome, peso, ordem e ativo/inativo). Se a tabela estiver vazia, o app
+usa esta lista padrão:
+
+| Impacto | Peso |
+|---|---|
+| Geração de receita ou conversão | 5 |
+| Redução de custo | 5 |
+| Redução de risco ou inadimplência | 4 |
+| Tempo economizado | 3 |
+| Qualidade de entrega | 3 |
+| Velocidade de decisão | 2 |
+
+Tanto o problema quanto a iniciativa recebem, para **cada** impacto ativo, uma
+intensidade: `Nenhum` (0), `Baixo` (1), `Médio` (2) ou `Alto` (3). A iniciativa criada
+a partir de um problema herda as intensidades dele.
+
+As intensidades são gravadas em `problemas.impactos_json` e `iniciativas.impactos_json`
+(`{"nome do impacto": intensidade}`). Os campos de texto `problemas.impacto` e
+`iniciativas.bucket` continuam sendo preenchidos com os nomes marcados, só para leitura
+e para registros antigos.
+
+A mesma aba Configurações mantém as **abordagens** de resolução (tabela `abordagens`:
+desenvolvimento com IA, solução de mercado, melhoria de processo etc.), escolhidas na
+iniciativa.
+
+---
+
+## Score de impacto
+
+```
+score = Σ (peso do impacto × intensidade) ÷ esforço
+```
+
+- **Esforço** estimado de implementação: `Baixo` (1), `Médio` (2) ou `Alto` (3),
+  definido pelo admin no problema e na iniciativa. Sem esforço definido, divide por 1.
+- A fila é ordenada automaticamente do maior para o menor score.
 
 | Faixa | Classificação |
 |---|---|
-| ≥ 64 | Crítico |
-| ≥ 27 | Alto |
-| ≥ 8 | Médio |
-| < 8 | Baixo |
+| ≥ 20 | Altíssimo |
+| ≥ 10 | Alto |
+| ≥ 4 | Médio |
+| < 4 | Baixo |
+
+As colunas `gravidade`, `urgencia`, `tendencia` e `gut` da tabela `problemas` são
+herança da Matriz GUT, que o app não usa mais; ficam no banco só por compatibilidade.
 
 ---
 
@@ -158,6 +181,9 @@ Os campos de valor (ganho financeiro, ganho operacional e custo) aceitam qualque
 valor e usam **máscara monetária** no padrão brasileiro (ex.: `R$ 42.111.141,41`).
 Os valores são gravados como número puro no banco.
 
+O bloco de **impactos** do dashboard mostra uma barra por impacto ativo, com a soma de
+`peso × intensidade` das iniciativas ativas, e o resumo das abordagens escolhidas.
+
 ---
 
 ## Stack
@@ -169,7 +195,8 @@ Os valores são gravados como número puro no banco.
 - **Projeto Supabase compartilhado:** o projeto `labdame` também hospeda o "My Notes",
   outro sistema, que usa o schema `mynotes` e a Edge Function `agente`. Nada disso é do
   Lab Dame e nada disso fica neste repositório (ver "Notas técnicas").
-- **Hospedagem:** GitHub Pages (repositório privado)
+- **Hospedagem:** GitHub Pages, publicado da `main` do repositório público
+  `projetos-realbem/lab-dame`
 - **Auth:** Email + senha via Supabase Auth (somente admins cadastrados)
 
 ---
@@ -325,8 +352,14 @@ Nenhum acesso externo chega nela.
 
 ## Histórico de mudanças recentes
 
+- Repositório transferido para a conta `projetos-realbem`; o site passou a
+  `https://projetos-realbem.github.io/lab-dame/`.
+- **Matriz GUT substituída pelo score de impacto ponderado**: impactos com peso
+  (configuráveis na aba Configurações), intensidade por impacto e esforço como divisor.
+  As colunas GUT ficaram no banco sem uso.
 - Impacto estimado (problema) e Categoria de impacto (iniciativa) passaram a ser
-  seleção por **checkbox de múltipla escolha** com categorias padronizadas.
+  seleção por **checkbox de múltipla escolha** com categorias padronizadas
+  (depois evoluída para intensidade por impacto).
 - Campos de valor com **máscara monetária** que aceitam qualquer valor.
 - Removida a exclusão de problemas e iniciativas pela interface.
 - Priorizar/recusar um problema só é permitido **após vínculo a uma sessão**.
