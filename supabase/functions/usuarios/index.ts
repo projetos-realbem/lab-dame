@@ -21,8 +21,14 @@ import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supa
 // HTTP
 
 /** Origens autorizadas (produção + testes locais do index.html). */
+const ORIGENS_PRODUCAO = [
+  'https://projetos-realbem.github.io',
+  // Conta antiga: remover depois que a migração do repositório estiver concluída.
+  'https://robertocassianoteixeira.github.io',
+]
+
 function origemPermitida(origem: string): boolean {
-  if (origem === 'https://robertocassianoteixeira.github.io') return true
+  if (ORIGENS_PRODUCAO.includes(origem)) return true
   return /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origem)
 }
 
