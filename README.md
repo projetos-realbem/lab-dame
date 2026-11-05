@@ -202,7 +202,8 @@ supabase functions deploy usuarios --project-ref gcdrjkqexfbuenpkvovo
 
 A função usa `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, que o Supabase injeta sozinho.
 Ela só atende quem tem sessão válida **e** e-mail na tabela `admins`, e aceita chamadas
-apenas de `https://robertocassianoteixeira.github.io` e de `localhost`.
+apenas de `https://projetos-realbem.github.io` (e, até a migração terminar, também de
+`https://robertocassianoteixeira.github.io`) e de `localhost`.
 
 Para testar o `index.html` localmente, sirva a pasta por HTTP (ex.: `npx serve .`) e
 abra `http://localhost:3000`. Abrir o arquivo direto (`file://`) não funciona com a função.
