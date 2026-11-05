@@ -142,8 +142,8 @@ score = Σ (peso do impacto × intensidade) ÷ esforço
 | ≥ 4 | Médio |
 | < 4 | Baixo |
 
-As colunas `gravidade`, `urgencia`, `tendencia` e `gut` da tabela `problemas` são
-herança da Matriz GUT, que o app não usa mais; ficam no banco só por compatibilidade.
+As colunas da Matriz GUT (`gravidade`, `urgencia`, `tendencia`, `gut`) foram removidas
+da tabela `problemas` em 05/11/2026 (`supabase/migrations/20261105_remover_colunas_gut.sql`).
 
 ---
 
@@ -207,6 +207,7 @@ O bloco de **impactos** do dashboard mostra uma barra por impacto ativo, com a s
 index.html                        App completo (UI + lógica)
 supabase-schema.sql               Schema, triggers e políticas RLS (espelho da produção)
 supabase/config.toml              Configuração mínima do Supabase CLI
+supabase/migrations/              Alterações pontuais já aplicadas em produção (histórico)
 supabase/functions/usuarios/      Edge Function de gestão de usuários
 README.md
 ```
@@ -356,7 +357,7 @@ Nenhum acesso externo chega nela.
   `https://projetos-realbem.github.io/lab-dame/`.
 - **Matriz GUT substituída pelo score de impacto ponderado**: impactos com peso
   (configuráveis na aba Configurações), intensidade por impacto e esforço como divisor.
-  As colunas GUT ficaram no banco sem uso.
+  As colunas GUT foram removidas do banco.
 - Impacto estimado (problema) e Categoria de impacto (iniciativa) passaram a ser
   seleção por **checkbox de múltipla escolha** com categorias padronizadas
   (depois evoluída para intensidade por impacto).
