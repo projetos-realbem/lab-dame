@@ -166,6 +166,9 @@ Os valores são gravados como número puro no banco.
 - **Backend:** [Supabase](https://supabase.com) — Postgres + Auth + RLS
 - **Edge Function `usuarios`:** gestão de usuários (precisa da chave de serviço, por isso
   roda no Supabase e não no navegador)
+- **Projeto Supabase compartilhado:** o projeto `labdame` também hospeda o "My Notes",
+  outro sistema, que usa o schema `mynotes` e a Edge Function `agente`. Nada disso é do
+  Lab Dame e nada disso fica neste repositório (ver "Notas técnicas").
 - **Hospedagem:** GitHub Pages (repositório privado)
 - **Auth:** Email + senha via Supabase Auth (somente admins cadastrados)
 
@@ -180,6 +183,9 @@ supabase/config.toml              Configuração mínima do Supabase CLI
 supabase/functions/usuarios/      Edge Function de gestão de usuários
 README.md
 ```
+
+A Edge Function `agente`, que aparece no painel do mesmo projeto Supabase, é do
+"My Notes" e fica de fora de propósito (ver "Notas técnicas").
 
 ## Publicar a Edge Function `usuarios`
 
@@ -298,6 +304,13 @@ Nenhum acesso externo chega nela.
   idempotente: pode ser rodado de novo para completar uma instalação antiga. Depois de
   mudar o schema pelo painel, atualize o arquivo (`supabase db dump --linked --schema public`
   com o Docker aberto) para o repositório não ficar para trás.
+- **O projeto Supabase é dividido com o "My Notes":** no painel do projeto `labdame`
+  aparecem o schema `mynotes` (tabelas `membros`, `notas`, `conversas`, `eventos`) e a
+  Edge Function `agente`, que pertencem a esse outro sistema. O Lab Dame só usa o schema
+  `public` e a função `usuarios`; o dump do schema (`--schema public`) já ignora o
+  `mynotes`. Não publique nem apague a `agente` a partir deste repositório, e não a
+  registre no `supabase/config.toml`: um `supabase functions deploy` sem nome de função
+  publica tudo que está em `supabase/functions/`, e só a `usuarios` deve estar lá.
 
 ---
 
