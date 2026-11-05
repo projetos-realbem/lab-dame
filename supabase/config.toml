@@ -1,5 +1,7 @@
 # Configuração mínima para o Supabase CLI publicar as Edge Functions.
 # O projeto de produção é o "labdame" (ref gcdrjkqexfbuenpkvovo).
+# A Edge Function `agente`, publicada no mesmo projeto, é do "My Notes"
+# (outro sistema) e não é registrada nem publicada a partir daqui.
 project_id = "labdame"
 
 [functions.usuarios]
