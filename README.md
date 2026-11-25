@@ -166,7 +166,37 @@ Os itens tratados nela são **liberados** automaticamente antes de a sessão ser
 - **Iniciativas** são desvinculadas (mantêm o status atual).
 
 Isso garante que nada fique "órfão", independentemente da configuração de chave
-estrangeira no banco.
+estrangeira no banco. As pendências da sessão são apagadas junto (`on delete cascade`).
+
+### Pendências da sessão
+
+Cada sessão tem uma lista de **pendências**: ações que surgem na reunião e precisam
+ser verificadas depois (tabela `sessao_pendencias`, adicionada em 25/11/2026).
+Cada pendência tem descrição, responsável (texto livre, com sugestão dos nomes já
+usados no app), prazo opcional e um check de conclusão.
+
+- No **formulário** da sessão (abaixo de Aprendizados) o admin adiciona, edita e
+  remove pendências; tudo é salvo junto com o botão Salvar.
+- No **detalhe** da sessão o check funciona direto, sem entrar em Editar: marcar
+  grava a data de conclusão; desmarcar reabre.
+- Situação pela cor: **vermelho** atrasada, **âmbar** vence em até 7 dias,
+  **cinza** no prazo ou sem prazo, **verde** concluída.
+- A lista de sessões mostra um badge com a contagem ("2 pendências · 1 atrasada")
+  e o Dashboard tem o card **Pendências em aberto**, com as de todas as sessões
+  ordenadas por prazo (clicar abre a sessão).
+
+### Pauta da sessão (imprimir / PDF / copiar)
+
+O botão **Pauta**, no detalhe da sessão, abre em nova aba um documento com:
+dados da sessão, tema central, problemas na fila (os vinculados à sessão, ordenados
+pelo score; se a sessão ainda não tiver vínculos, a fila inteira com status `Novo`
+ou `Priorizado`), iniciativas em acompanhamento, decisões, aprendizados e pendências.
+Decisões e aprendizados vazios saem como bloco "a registrar na sessão", para o mesmo
+documento servir de pauta antes da reunião e de registro depois.
+
+A barra do topo (não impressa) tem **Imprimir / salvar PDF** (diálogo de impressão
+do navegador), **Copiar como texto** (versão em texto simples para Teams ou e-mail)
+e **Fechar**. O navegador precisa permitir a nova aba (pop-up) para o site.
 
 ---
 
@@ -208,6 +238,7 @@ index.html                        App completo (UI + lógica)
 supabase-schema.sql               Schema, triggers e políticas RLS (espelho da produção)
 supabase/config.toml              Configuração mínima do Supabase CLI
 supabase/migrations/              Alterações pontuais já aplicadas em produção (histórico)
+                                  (20261125_sessao_pendencias.sql: tabela de pendências)
 supabase/functions/usuarios/      Edge Function de gestão de usuários
 README.md
 ```
@@ -353,6 +384,10 @@ Nenhum acesso externo chega nela.
 
 ## Histórico de mudanças recentes
 
+- **Pendências por sessão** (descrição, responsável, prazo e check) na tabela
+  `sessao_pendencias`, com badge na lista de sessões e card no Dashboard.
+- Botão **Pauta** no detalhe da sessão: documento em nova aba para imprimir,
+  salvar em PDF ou copiar como texto.
 - Repositório transferido para a conta `projetos-realbem`; o site passou a
   `https://projetos-realbem.github.io/lab-dame/`.
 - **Matriz GUT substituída pelo score de impacto ponderado**: impactos com peso

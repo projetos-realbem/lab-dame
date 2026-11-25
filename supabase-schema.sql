@@ -3,7 +3,8 @@
 -- Rode este script inteiro no SQL Editor do Supabase.
 --
 -- Espelha o schema `public` do projeto de produção (dump de 04/11/2026,
--- mais a remoção das colunas GUT de 05/11/2026).
+-- mais a remoção das colunas GUT de 05/11/2026 e a tabela
+-- `sessao_pendencias` de 25/11/2026).
 -- É idempotente: pode ser rodado num projeto vazio ou por cima de uma
 -- instalação antiga (cria o que falta e não mexe no que já existe).
 -- ============================================================
@@ -56,6 +57,21 @@ create table if not exists public.sessoes (
   aprendizados text,
   criado_em    timestamptz not null default now()
 );
+
+-- Pendências de uma sessão: ações para verificar depois da reunião
+-- (adicionado em 25/11/2026; ver supabase/migrations/20261125_sessao_pendencias.sql)
+create table if not exists public.sessao_pendencias (
+  id           uuid primary key default gen_random_uuid(),
+  sessao_id    uuid not null references public.sessoes(id) on delete cascade,
+  descricao    text not null,
+  responsavel  text,
+  prazo        date,
+  concluida    boolean not null default false,
+  concluida_em timestamptz,
+  ordem        int not null default 0,       -- ordem de exibição dentro da sessão
+  criado_em    timestamptz not null default now()
+);
+create index if not exists idx_sessao_pendencias_sessao_id on public.sessao_pendencias (sessao_id);
 
 -- Problemas enviados pelo formulário público
 create table if not exists public.problemas (
@@ -212,6 +228,7 @@ alter table public.admins      enable row level security;
 alter table public.problemas   enable row level security;
 alter table public.iniciativas enable row level security;
 alter table public.sessoes     enable row level security;
+alter table public.sessao_pendencias enable row level security;
 alter table public.impactos    enable row level security;
 alter table public.abordagens  enable row level security;
 alter table public.comentarios enable row level security;
@@ -258,6 +275,13 @@ create policy iniciativas_all_admin
 drop policy if exists sessoes_all_admin on public.sessoes;
 create policy sessoes_all_admin
   on public.sessoes for all
+  to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+-- ---- sessao_pendencias ---- (tudo só admin)
+drop policy if exists sessao_pendencias_all_admin on public.sessao_pendencias;
+create policy sessao_pendencias_all_admin
+  on public.sessao_pendencias for all
   to authenticated
   using (public.is_admin()) with check (public.is_admin());
 
