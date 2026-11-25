@@ -128,6 +128,26 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body
 .empty p{font-size:13.5px;margin:0;}
 
 .rank-num{font-family:var(--font-mono);font-size:16px;color:var(--text-muted);width:28px;text-align:center;flex-shrink:0;align-self:center;}
+
+/* pendências de sessão */
+.pend-grid{display:grid;grid-template-columns:22px minmax(0,1fr) 160px 150px 28px;gap:8px;align-items:center;}
+.pend-head{font-size:11px;color:var(--slate);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.pend-row{margin-bottom:8px;}
+.pend-row input{padding:7px 10px;font-size:13px;}
+.pend-row .pend-done:checked ~ .pend-desc{text-decoration:line-through;color:var(--text-muted);}
+.pend-del{background:none;border:0;color:var(--slate);font-size:18px;line-height:1;padding:0;cursor:pointer;}
+.pend-del:hover{color:var(--rose);}
+@media(max-width:640px){.pend-grid{grid-template-columns:22px minmax(0,1fr) 28px;}.pend-head span:nth-child(3),.pend-head span:nth-child(4){display:none;}.pend-row .pend-resp,.pend-row .pend-prazo{grid-column:2;}}
+.pend-list{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.pend-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);font-size:13px;flex-wrap:wrap;cursor:pointer;}
+.pend-item input{width:15px;height:15px;accent-color:var(--accent);margin:0;flex:none;cursor:pointer;}
+.pend-desc-v{flex:1 1 220px;min-width:0;}
+.pend-item.done .pend-desc-v{color:var(--text-muted);text-decoration:line-through;}
+.pend-who{color:var(--text-muted);font-size:12px;}
+.dash-pend{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer;flex-wrap:wrap;}
+.dash-pend:last-child{border-bottom:0;}
+.dash-pend:hover .dash-pend-t{color:var(--accent);}
+.dash-pend-t{flex:1 1 200px;min-width:0;}
 .divider{height:1px;background:var(--border);margin:18px 0;}
 
 footer{margin-top:40px;display:flex;justify-content:center;gap:18px;flex-wrap:wrap;}
@@ -314,7 +334,7 @@ const FORMATOS = ['Priorização semanal','Demo de caso','Exploração de técni
 /* ===================== ESTADO ===================== */
 let session = null;          // sessão Supabase Auth (admin logado)
 let isAdmin = false;         // usuário logado consta em `admins`?
-let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [], impactos: [], abordagens: [] };
+let cache = { problemas: [], iniciativas: [], sessoes: [], comentarios: [], impactos: [], abordagens: [], pendencias: [] };
 let currentTab = 'dashboard';
 let filterStatus = 'Nova';
 let filterProbStatus = 'Novo';
@@ -384,18 +404,209 @@ function toast(msg, kind){
   setTimeout(()=>{ root.innerHTML=''; }, 3200);
 }
 function today(){ return new Date().toISOString().slice(0,10); }
+// data ISO (date ou timestamptz) -> "DD/MM"
+function fmtDM(v){
+  if(!v) return '';
+  const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/); if(m) return `${m[3]}/${m[2]}`;
+  const d=new Date(v); return isNaN(d)?'':`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function fmtAgora(){ const d=new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+
+/* ===================== PENDÊNCIAS DE SESSÃO ===================== */
+function pendDaSessao(sessaoId){ return cache.pendencias.filter(p=>p.sessao_id===sessaoId); }
+// dias entre hoje e o prazo (negativo = atrasada); null = sem prazo
+function pendDias(p){
+  if(!p.prazo) return null;
+  const [y,m,d]=String(p.prazo).split('-').map(Number); if(!y||!m||!d) return null;
+  const h=new Date(); const hoje=new Date(h.getFullYear(),h.getMonth(),h.getDate());
+  return Math.round((new Date(y,m-1,d)-hoje)/86400000);
+}
+function pendSituacao(p){
+  if(p.concluida) return {kind:'ok',label:'Concluída'+(p.concluida_em?' em '+fmtDM(p.concluida_em):''),c:'var(--green)',bg:'var(--green-soft)'};
+  const dias=pendDias(p);
+  if(dias===null) return {kind:'aberta',label:'Sem prazo',c:'var(--slate)',bg:'var(--slate-soft)'};
+  if(dias<0) return {kind:'atrasada',label:`Atrasada · ${fmtDM(p.prazo)}`,c:'var(--rose)',bg:'var(--rose-soft)'};
+  if(dias===0) return {kind:'vence',label:`Vence hoje · ${fmtDM(p.prazo)}`,c:'var(--amber)',bg:'var(--amber-soft)'};
+  if(dias<=7) return {kind:'vence',label:`Vence em ${dias} dia${dias>1?'s':''} · ${fmtDM(p.prazo)}`,c:'var(--amber)',bg:'var(--amber-soft)'};
+  return {kind:'aberta',label:fmtDate(p.prazo),c:'var(--slate)',bg:'var(--slate-soft)'};
+}
+function pendResumo(sessaoId){
+  const l=pendDaSessao(sessaoId); const abertas=l.filter(p=>!p.concluida);
+  const atrasadas=abertas.filter(p=>{const d=pendDias(p);return d!==null&&d<0;});
+  return {total:l.length,abertas:abertas.length,atrasadas:atrasadas.length,concluidas:l.length-abertas.length};
+}
+// badge para a lista de sessões: "3 pendências · 1 atrasada" / "Pendências concluídas"
+function pendBadgeHtml(sessaoId){
+  const r=pendResumo(sessaoId); if(!r.total) return '';
+  if(!r.abertas) return `<span class="badge" style="background:var(--green-soft);color:var(--green)">Pendências concluídas</span>`;
+  const txt=`${r.abertas} pendência${r.abertas>1?'s':''}`+(r.atrasadas?` · ${r.atrasadas} atrasada${r.atrasadas>1?'s':''}`:'');
+  const col=r.atrasadas?{c:'var(--rose)',bg:'var(--rose-soft)'}:{c:'var(--amber)',bg:'var(--amber-soft)'};
+  return `<span class="badge" style="background:${col.bg};color:${col.c}">${txt}</span>`;
+}
+// nomes já usados no app (âncora, dono, solicitante, responsável, usuários) para sugerir no campo Responsável
+function pessoasSugeridas(){
+  const set=new Set(); const add=v=>{ const t=(v==null?'':String(v)).trim(); if(t) set.add(t); };
+  cache.sessoes.forEach(s=>add(s.ancora)); cache.iniciativas.forEach(c=>add(c.dono)); cache.problemas.forEach(p=>add(p.solicitante));
+  cache.pendencias.forEach(p=>add(p.responsavel)); (usuarios||[]).forEach(u=>add(u.nome));
+  return [...set].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+function pendRowHtml(p){
+  p=p||{};
+  return `<div class="pend-grid pend-row" data-pid="${esc(p.id||'')}"><input type="checkbox" class="pend-done" title="Concluída" ${p.concluida?'checked':''}><input class="pend-desc" value="${esc(p.descricao)}" placeholder="Descreva a ação…"><input class="pend-resp" list="pessoasList" value="${esc(p.responsavel)}" placeholder="Responsável"><input type="date" class="pend-prazo" value="${esc(p.prazo)}" title="Prazo"><button type="button" class="pend-del" title="Remover">×</button></div>`;
+}
+function lerPendenciasForm(form){
+  return [...form.querySelectorAll('.pend-row')].map((r,i)=>({
+    id:r.dataset.pid||null,
+    descricao:r.querySelector('.pend-desc').value.trim(),
+    responsavel:r.querySelector('.pend-resp').value.trim()||null,
+    prazo:r.querySelector('.pend-prazo').value||null,
+    concluida:r.querySelector('.pend-done').checked,
+    ordem:i
+  })).filter(p=>p.descricao);
+}
+// sincroniza as linhas do formulário com o banco: insere novas, atualiza as alteradas, apaga as removidas
+async function salvarPendencias(sessaoId, form, editing){
+  const atuais=editing?pendDaSessao(editing.id):[];
+  const rows=lerPendenciasForm(form);
+  const keep=new Set();
+  for(const r of rows){
+    const ex=r.id?atuais.find(p=>p.id===r.id):null;
+    const concluida_em=r.concluida?((ex&&ex.concluida&&ex.concluida_em)?ex.concluida_em:new Date().toISOString()):null;
+    const payload={sessao_id:sessaoId,descricao:r.descricao,responsavel:r.responsavel,prazo:r.prazo,concluida:r.concluida,concluida_em,ordem:r.ordem};
+    if(ex){
+      keep.add(ex.id);
+      const mudou=['descricao','responsavel','prazo','concluida','concluida_em','ordem'].some(k=>(ex[k]??null)!==(payload[k]??null));
+      if(mudou){ const e=await updateRow('sessao_pendencias',ex.id,payload); if(e) return e; }
+    } else {
+      const {error}=await insertRow('sessao_pendencias',payload); if(error) return error;
+    }
+  }
+  for(const p of atuais){ if(!keep.has(p.id)){ const e=await deleteRow('sessao_pendencias',p.id); if(e) return e; } }
+  return null;
+}
+
+/* ===================== PAUTA DA SESSÃO (nova aba, imprimir / PDF / copiar) ===================== */
+function pautaDados(s){
+  const ligados=cache.problemas.filter(p=>p.sessao_id===s.id);
+  const probOk=st=>normStatus(st)===normStatus('Novo')||normStatus(st)===normStatus('Priorizado');
+  // sessão sem vínculos (ainda não aconteceu): a pauta traz a fila inteira
+  const fila=ligados.length?ligados:cache.problemas.filter(p=>probOk(p.status)&&!p.sessao_id);
+  const problemas=[...fila].sort((a,b)=>impactScore(b)-impactScore(a));
+  const iniciativas=cache.iniciativas.filter(c=>c.sessao_id===s.id).sort((a,b)=>(a.titulo||'').localeCompare(b.titulo||''));
+  return {problemas,usouFila:!ligados.length&&fila.length>0,iniciativas,pendencias:pendDaSessao(s.id)};
+}
+// situação por extenso sem repetir a data do prazo (usada na pauta)
+function pendSituacaoTexto(p){ const st=pendSituacao(p); return (st.kind==='aberta'&&p.prazo)?'Em aberto':st.label; }
+function pautaTexto(s){
+  const {problemas,usouFila,iniciativas,pendencias}=pautaDados(s);
+  const L=[];
+  L.push(`LAB DAME · PAUTA · SESSÃO ${s.numero||'—'} (${s.codigo||''})`);
+  L.push(`Data: ${fmtDate(s.data)} · Formato: ${s.formato||'—'} · Âncora: ${s.ancora||'—'}`);
+  L.push('');
+  L.push('1. TEMA CENTRAL'); L.push(s.problema||'—'); L.push('');
+  L.push('2. PROBLEMAS NA FILA PARA ANÁLISE'+(usouFila?' (fila atual: a sessão ainda não tem problemas vinculados)':''));
+  if(problemas.length) problemas.forEach((p,i)=>L.push(`${i+1}. ${p.codigo||''} · ${p.titulo} · Score ${fmtNum(impactScore(p),1)} · ${p.area||'—'} · ${p.solicitante||'—'} · ${p.status||''}`));
+  else L.push('Nenhum problema.');
+  L.push('');
+  L.push('3. INICIATIVAS EM ACOMPANHAMENTO');
+  if(iniciativas.length) iniciativas.forEach(c=>L.push(`- ${c.codigo||''} · ${c.titulo} · Dono: ${c.dono||'—'} · ${c.status||''}`));
+  else L.push('Nenhuma iniciativa vinculada.');
+  L.push('');
+  L.push('4. DECISÕES DE PRIORIZAÇÃO'); L.push(s.resultado||'(a registrar na sessão)'); L.push('');
+  L.push('5. APRENDIZADOS'); L.push(s.aprendizados||'(a registrar na sessão)'); L.push('');
+  L.push('6. PENDÊNCIAS');
+  if(pendencias.length) pendencias.forEach(p=>L.push(`[${p.concluida?'x':' '}] ${p.descricao} · ${p.responsavel||'—'} · ${p.prazo?'Prazo '+fmtDate(p.prazo)+' · ':''}${pendSituacaoTexto(p)}`));
+  else L.push('Nenhuma pendência.');
+  L.push('');
+  L.push(`Gerado pelo Lab Dame em ${fmtAgora()}`);
+  return L.join('\n');
+}
+function pautaHtml(s){
+  const {problemas,usouFila,iniciativas,pendencias}=pautaDados(s);
+  const titulo=`Pauta · Sessão ${s.numero||'—'}`;
+  const vazio=`<div class="lines">A registrar na sessão</div>`;
+  const texto=t=>t?`<p>${esc(t).replace(/\n/g,'<br>')}</p>`:vazio;
+  const probRows=problemas.length?problemas.map((p,i)=>`<tr><td class="n">${i+1}</td><td class="c">${esc(p.codigo||'')}</td><td>${esc(p.titulo)}</td><td>${esc(p.area||'—')}</td><td>${esc(p.solicitante||'—')}</td><td class="n">${fmtNum(impactScore(p),1)}</td><td>${esc(p.status||'')}</td></tr>`).join(''):`<tr><td colspan="7" class="muted">Nenhum problema.</td></tr>`;
+  const iniRows=iniciativas.length?iniciativas.map(c=>`<tr><td class="c">${esc(c.codigo||'')}</td><td>${esc(c.titulo)}</td><td>${esc(c.dono||'—')}</td><td>${esc(c.status||'')}</td></tr>`).join(''):`<tr><td colspan="4" class="muted">Nenhuma iniciativa vinculada.</td></tr>`;
+  const pendRows=pendencias.length?pendencias.map(p=>`<tr><td><span class="box${p.concluida?' on':''}"></span></td><td>${esc(p.descricao)}</td><td>${esc(p.responsavel||'—')}</td><td class="n">${p.prazo?fmtDate(p.prazo):'—'}</td><td>${esc(pendSituacaoTexto(p))}</td></tr>`).join(''):`<tr><td colspan="5" class="muted">Nenhuma pendência.</td></tr>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)} · ${esc(s.codigo||'')} · Lab Dame</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{--ink:#1A2233;--muted:#5B6578;--line:#D9DEE8;--head:#EEF1F6;--accent:#0F9E8E;}
+*{box-sizing:border-box}
+body{margin:0;background:#2A3449;font-family:'Inter',system-ui,sans-serif;color:var(--ink);font-size:12.5px;line-height:1.5;padding:16px}
+.toolbar{max-width:860px;margin:0 auto 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.toolbar button{font:600 13px 'Inter',system-ui,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid #2DD4BF;background:rgba(45,212,191,.12);color:#2DD4BF;cursor:pointer}
+.toolbar button.ghost{border-color:#3A4660;background:none;color:#B9C3D6}
+.toolbar .tag{font-size:11.5px;color:#B9C3D6;margin-left:auto}
+.paper{max-width:860px;margin:0 auto;background:#fff;border-radius:4px;padding:32px 36px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.top{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap}
+.brand{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:'Space Grotesk',sans-serif;font-size:20px;margin:2px 0 0;font-weight:600}
+.meta{font-size:12px;color:var(--muted);text-align:right}
+h2{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px;padding-bottom:3px;border-bottom:1px solid var(--line);font-weight:600}
+p{margin:0;white-space:normal}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;background:var(--head);font-weight:600;padding:5px 8px;border:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+td{padding:5px 8px;border:1px solid var(--line);vertical-align:top}
+td.c{font-family:'IBM Plex Mono',monospace;font-size:11px;white-space:nowrap}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.muted{color:var(--muted);font-style:italic}
+.hint{margin:6px 0 0;font-size:11px;color:var(--muted)}
+.lines{color:var(--muted);font-style:italic;border:1px dashed var(--line);padding:10px;border-radius:3px;min-height:48px}
+.box{display:inline-block;width:11px;height:11px;border:1px solid var(--ink);vertical-align:-1px;border-radius:2px}
+.box.on{background:var(--ink)}
+.foot{margin-top:20px;padding-top:8px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+#pautaTxt{width:100%;max-width:860px;margin:12px auto 0;display:block;height:220px;font:12px 'IBM Plex Mono',monospace}
+@page{size:A4;margin:14mm}
+@media print{body{background:#fff;padding:0}.toolbar,#pautaTxt{display:none!important}.paper{box-shadow:none;padding:0;max-width:none;border-radius:0}h2{break-after:avoid}tr{break-inside:avoid}}
+@media(max-width:600px){.paper{padding:20px 16px}.meta{text-align:left}}
+</style></head><body>
+<div class="toolbar"><button id="btnPrint">Imprimir / salvar PDF</button><button id="btnCopy" class="ghost">Copiar como texto</button><button id="btnClose" class="ghost">Fechar</button><span class="tag">a barra não sai na impressão</span></div>
+<div class="paper">
+  <div class="top"><div><div class="brand">Lab Dame · Cultura de IA</div><h1>${esc(titulo)}</h1></div><div class="meta">${esc(s.codigo||'')}<br>${fmtDate(s.data)} · ${esc(s.formato||'—')}<br>Âncora: ${esc(s.ancora||'—')}</div></div>
+  <h2>1. Tema central</h2>${texto(s.problema)}
+  <h2>2. Problemas na fila para análise</h2>
+  <table><thead><tr><th>#</th><th>Código</th><th>Problema</th><th>Área</th><th>Solicitante</th><th>Score</th><th>Status</th></tr></thead><tbody>${probRows}</tbody></table>
+  <p class="hint">${usouFila?'A sessão ainda não tem problemas vinculados: a lista traz a fila atual (status Novo ou Priorizado), ordenada pelo score de impacto.':'Problemas vinculados a esta sessão, ordenados pelo score de impacto.'}</p>
+  <h2>3. Iniciativas em acompanhamento</h2>
+  <table><thead><tr><th>Código</th><th>Iniciativa</th><th>Dono</th><th>Status</th></tr></thead><tbody>${iniRows}</tbody></table>
+  <h2>4. Decisões de priorização</h2>${texto(s.resultado)}
+  <h2>5. Aprendizados</h2>${texto(s.aprendizados)}
+  <h2>6. Pendências</h2>
+  <table><thead><tr><th></th><th>Ação</th><th>Responsável</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>${pendRows}</tbody></table>
+  <div class="foot"><span>Lab Dame · Gestão de Iniciativas de IA</span><span>Gerado em ${fmtAgora()}</span></div>
+</div>
+<textarea id="pautaTxt" hidden readonly>${esc(pautaTexto(s))}</textarea>
+<script>
+document.getElementById('btnPrint').addEventListener('click',function(){ window.print(); });
+document.getElementById('btnClose').addEventListener('click',function(){ window.close(); });
+document.getElementById('btnCopy').addEventListener('click',async function(){
+  var ta=document.getElementById('pautaTxt'), b=this;
+  try{ await navigator.clipboard.writeText(ta.value); b.textContent='Copiado'; setTimeout(function(){ b.textContent='Copiar como texto'; },2000); }
+  catch(e){ ta.hidden=false; ta.focus(); ta.select(); b.textContent='Selecione e copie (Ctrl+C)'; }
+});
+<\/script></body></html>`;
+}
+function abrirPauta(s){
+  const w=window.open('','_blank');
+  if(!w){ toast('O navegador bloqueou a nova aba. Libere pop-ups para este site.','err'); return; }
+  w.document.open(); w.document.write(pautaHtml(s)); w.document.close();
+}
 
 /* ===================== DATA LAYER (Supabase) ===================== */
 async function refreshAll(){
   if(!sb) return;
-  const [pr, ini, ses, com, imp, abo] = await Promise.all([
+  const [pr, ini, ses, com, imp, abo, pen] = await Promise.all([
     sb.from('problemas').select('*'),
     sb.from('iniciativas').select('*'),
     sb.from('sessoes').select('*'),
     sb.from('comentarios').select('*').order('criado_em',{ascending:true}),
     sb.from('impactos').select('*'),
-    sb.from('abordagens').select('*')
+    sb.from('abordagens').select('*'),
+    sb.from('sessao_pendencias').select('*').order('ordem',{ascending:true}).order('criado_em',{ascending:true})
   ]);
+  if(pen && pen.error) console.error('sessao_pendencias:', pen.error);
   if(pr.error && pr.error.code!=='42501') console.error(pr.error);
   cache.problemas   = pr.data   || [];
   cache.iniciativas = ini.data  || [];
@@ -403,6 +614,7 @@ async function refreshAll(){
   cache.comentarios = com.data  || [];
   cache.impactos    = (imp && imp.data) || [];
   cache.abordagens  = (abo && abo.data) || [];
+  cache.pendencias  = (pen && pen.data) || [];
 }
 
 async function insertProblemaPublic(payload){
@@ -713,7 +925,7 @@ function renderAdminApp(){
   refreshBuildStamp();
 
   const content=document.getElementById('content');
-  if(currentTab==='dashboard') content.innerHTML=renderDashboard();
+  if(currentTab==='dashboard'){ content.innerHTML=renderDashboard(); attachDashboardHandlers(content); }
   if(currentTab==='problemas') renderProblemasTab(content);
   if(currentTab==='iniciativas') renderIniciativasTab(content);
   if(currentTab==='sessoes') renderSessoesTab(content);
@@ -1029,7 +1241,11 @@ function renderDashboard(){
   const rankScoreHtml=rankedScore.length?rankedScore.map(({c,s})=>{const sc=scoreColor(s);const w=Math.max(4,s/maxScore*100);return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;gap:10px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.codigo||'')} ${esc(c.titulo)}</span><span style="font-family:var(--font-mono);color:${sc.c};white-space:nowrap">${s.toFixed(1)}</span></div><div class="mini-bar-wrap"><div class="mini-bar" style="width:${w}%;background:${sc.c}"></div></div></div>`;}).join(''):`<div class="empty"><p>Nenhuma iniciativa com impacto registrado ainda.</p></div>`;
 
   const recent=[...cache.sessoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).slice(0,3);
-  const sessoesHtml=recent.length?recent.map(s=>`<div class="list-row" style="cursor:default"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span></div></div></div>`).join(''):`<div class="empty"><p>Nenhuma sessão registrada ainda.</p></div>`;
+  const sessoesHtml=recent.length?recent.map(s=>`<div class="list-row" data-gosessao="${s.id}"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span>${pendBadgeHtml(s.id)}</div></div></div>`).join(''):`<div class="empty"><p>Nenhuma sessão registrada ainda.</p></div>`;
+
+  // pendências em aberto de todas as sessões, das mais urgentes (atrasadas) às sem prazo
+  const pendAbertas=cache.pendencias.filter(p=>!p.concluida).map(p=>({p,d:pendDias(p)})).sort((a,b)=>(a.d===null?1e9:a.d)-(b.d===null?1e9:b.d)).slice(0,10);
+  const pendHtml=pendAbertas.length?pendAbertas.map(({p})=>{const st=pendSituacao(p);const ses=cache.sessoes.find(x=>x.id===p.sessao_id);return `<div class="dash-pend" data-gosessao="${p.sessao_id}"><span class="dash-pend-t"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(ses?(ses.codigo||''):'')}</span>${esc(p.descricao)}</span><span class="badge" style="background:${st.bg};color:${st.c}">${p.responsavel?esc(p.responsavel)+' · ':''}${st.label}</span></div>`;}).join(''):`<div class="empty" style="padding:22px"><p>Nenhuma pendência em aberto.</p></div>`;
 
   return `<div class="section-title">Ganhos consolidados</div><div class="hero-grid">${heroHtml}</div>
     <div class="section-title">Funil de iniciativas</div>${funil}
@@ -1041,7 +1257,11 @@ function renderDashboard(){
       <div><div class="section-title" style="margin-top:0">Valor por dimensão de impacto <span class="hint" style="text-transform:none;letter-spacing:0">— peso × intensidade</span></div><div class="card">${bucketsHtml}</div></div>
       <div><div class="section-title" style="margin-top:0">Iniciativas por abordagem <span class="hint" style="text-transform:none;letter-spacing:0">— como estão sendo tratadas</span></div><div class="card">${abordagensHtml}</div></div>
     </div>
-    <div class="section-title">Últimas sessões</div><div class="card">${sessoesHtml}</div>`;
+    <div class="section-title">Pendências em aberto <span class="hint" style="text-transform:none;letter-spacing:0">— das sessões, por prazo</span></div><div class="card">${pendHtml}</div>
+    <div class="section-title" style="margin-top:22px">Últimas sessões</div><div class="card">${sessoesHtml}</div>`;
+}
+function attachDashboardHandlers(content){
+  content.querySelectorAll('[data-gosessao]').forEach(el=>el.addEventListener('click',()=>{ currentTab='sessoes'; openForm=null; openDetail={type:'sessao',id:el.dataset.gosessao}; render(); }));
 }
 
 /* ===================== PROBLEMAS (admin) ===================== */
@@ -1253,7 +1473,7 @@ function renderSessoesTab(content){
   if(openForm==='sessao') html+=sessaoFormHtml(detail);
   else if(detail) html+=sessaoDetailHtml(detail);
   if(!openForm&&!detail){
-    html+=list.length?list.map(s=>`<div class="list-row" data-open="${s.id}"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span></div></div></div>`).join(''):`<div class="empty">${iconCal()}<p>Nenhuma sessão registrada ainda.</p></div>`;
+    html+=list.length?list.map(s=>`<div class="list-row" data-open="${s.id}"><div class="status-bar" style="background:var(--accent)"></div><div class="list-row-body"><div class="list-row-title"><span style="font-family:var(--font-mono);color:var(--text-muted);font-size:11.5px;margin-right:7px">${esc(s.codigo||'')}</span>Sessão ${esc(s.numero||'—')} · ${fmtDate(s.data)}</div><div class="list-row-meta"><span>Âncora: ${esc(s.ancora||'—')}</span><span>${esc(s.formato||'—')}</span>${pendBadgeHtml(s.id)}</div></div></div>`).join(''):`<div class="empty">${iconCal()}<p>Nenhuma sessão registrada ainda.</p></div>`;
   }
   content.innerHTML=html;
   const nb=content.querySelector('#newSessaoBtn'); if(nb) nb.addEventListener('click',()=>{openForm='sessao';openDetail=null;render();});
@@ -1283,12 +1503,16 @@ function sessaoFormHtml(editing){
     <div class="field"><label>Notas / tema central</label><textarea name="problema" rows="2">${esc(s.problema)}</textarea></div>
     <div class="field"><label>Decisões de priorização</label><textarea name="resultado" rows="2">${esc(s.resultado)}</textarea></div>
     <div class="field"><label>Aprendizados</label><textarea name="aprendizados" rows="2">${esc(s.aprendizados)}</textarea></div>
+    <div class="field"><label>Pendências <span class="hint">ações para verificar depois da sessão</span></label><div class="card" style="padding:10px 12px"><div class="pend-grid pend-head"><span></span><span>Ação</span><span>Responsável</span><span>Prazo</span><span></span></div><div id="pendRows">${(editing?pendDaSessao(editing.id):[]).map(pendRowHtml).join('')}</div><div style="margin-top:4px"><button type="button" class="btn btn-ghost" id="addPendBtn" style="color:var(--accent);border-color:var(--accent)">+ Adicionar pendência</button></div></div><datalist id="pessoasList">${pessoasSugeridas().map(n=>`<option value="${esc(n)}"></option>`).join('')}</datalist></div>
     <div class="btn-row"><button type="submit" class="btn" id="saveSessao">Salvar</button><button type="button" class="btn btn-ghost" id="cancelSessao">Cancelar</button></div>
   </form></div>`;
 }
 function attachSessaoFormHandlers(content,editing){
   const form=content.querySelector('#sessaoForm'); if(!form) return;
   content.querySelector('#cancelSessao').addEventListener('click',()=>{openForm=null;render();});
+  const pendRows=form.querySelector('#pendRows');
+  form.querySelector('#addPendBtn').addEventListener('click',()=>{ pendRows.insertAdjacentHTML('beforeend',pendRowHtml()); const inp=pendRows.lastElementChild.querySelector('.pend-desc'); if(inp) inp.focus(); });
+  pendRows.addEventListener('click',e=>{ const b=e.target.closest('.pend-del'); if(b) b.closest('.pend-row').remove(); });
   form.addEventListener('submit', async (e)=>{
     e.preventDefault(); if(busy)return; busy=true;
     const b=content.querySelector('#saveSessao'); b.disabled=true;
@@ -1314,6 +1538,8 @@ function attachSessaoFormHandlers(content,editing){
         if(shouldLink&&!isLinked) await updateRow('iniciativas',c.id,{sessao_id:sessaoId});
         else if(!shouldLink&&isLinked) await updateRow('iniciativas',c.id,{sessao_id:null});
       }
+      const ep=await salvarPendencias(sessaoId,form,editing);
+      if(ep){ busy=false; console.error(ep); await refreshAll(); openForm=null; render(); toast('Sessão salva, mas houve erro nas pendências','err'); return; }
     }
     busy=false;
     await refreshAll(); openForm=null; render(); toast('Salvo','ok');
@@ -1322,29 +1548,42 @@ function attachSessaoFormHandlers(content,editing){
 function sessaoDetailHtml(s){
   const ligadas=cache.iniciativas.filter(c=>c.sessao_id===s.id);
   const lig=ligadas.length?ligadas.map(c=>{const col=iniColor(c.status);return `<div class="list-row" data-openini="${c.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${col.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(c.codigo)} ${esc(c.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${col.bg};color:${col.c}">${c.status}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma iniciativa vinculada.</div>`;
+  const pend=pendDaSessao(s.id); const pr=pendResumo(s.id);
+  const pendHtml=pend.length?pend.map(p=>{const st=pendSituacao(p);return `<label class="pend-item${p.concluida?' done':''}"><input type="checkbox" class="pend-toggle" data-pid="${p.id}" ${p.concluida?'checked':''} title="${p.concluida?'Reabrir':'Marcar como concluída'}"><span class="pend-desc-v">${esc(p.descricao)}</span>${p.responsavel?`<span class="pend-who">${esc(p.responsavel)}</span>`:''}<span class="badge" style="background:${st.bg};color:${st.c}">${st.label}</span></label>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhuma pendência registrada. Use Editar para adicionar.</div>`;
   const problemasLig=cache.problemas.filter(p=>p.sessao_id===s.id);
   const ligProb=problemasLig.length?problemasLig.map(p=>{const score=impactScore(p);const gc=scoreColor(score);const sc=(PROB_STATUS_COLOR[p.status]||PROB_STATUS_COLOR['Novo']);return `<div class="list-row" data-openprob="${p.id}" style="margin-bottom:6px"><div class="status-bar" style="background:${sc.c}"></div><div class="list-row-body"><div class="list-row-title" style="font-size:13px">${esc(p.codigo)} ${esc(p.titulo)}</div><div class="list-row-meta"><span class="badge" style="background:${sc.bg};color:${sc.c}">${p.status}</span><span class="gut-badge" style="background:${gc.bg};color:${gc.c}">Score ${score.toFixed(1)}</span></div></div></div>`;}).join(''):`<div style="font-size:13px;color:var(--text-muted)">Nenhum problema vinculado.</div>`;
-  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:var(--accent-soft);color:var(--accent)">${esc(s.codigo||'')} · Sessão ${esc(s.numero||'—')}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="editSessaoBtn">Editar</button><button class="btn btn-ghost" id="deleteSessaoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeSessaoBtn">Voltar</button></div></div>
+  return `<div class="card"><div class="top-actions" style="margin-bottom:8px"><span class="badge" style="background:var(--accent-soft);color:var(--accent)">${esc(s.codigo||'')} · Sessão ${esc(s.numero||'—')}</span><div class="btn-row" style="margin:0"><button class="btn btn-ghost" id="pautaSessaoBtn" title="Abre a pauta em nova aba para imprimir, salvar em PDF ou copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg> Pauta</button><button class="btn btn-ghost" id="editSessaoBtn">Editar</button><button class="btn btn-ghost" id="deleteSessaoBtn" style="color:var(--rose)">Excluir</button><button class="btn btn-ghost" id="closeSessaoBtn">Voltar</button></div></div>
     <div class="detail-grid"><div class="detail-field"><div class="k">Data</div><div class="v">${fmtDate(s.data)}</div></div><div class="detail-field"><div class="k">Âncora</div><div class="v">${esc(s.ancora)||'—'}</div></div><div class="detail-field"><div class="k">Formato</div><div class="v">${esc(s.formato)||'—'}</div></div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Notas / tema</div><div class="v">${esc(s.problema)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:12px"><div class="k">Decisões</div><div class="v">${esc(s.resultado)||'—'}</div></div>
     <div class="detail-field" style="margin-bottom:14px"><div class="k">Aprendizados</div><div class="v">${esc(s.aprendizados)||'—'}</div></div>
+    <div class="divider"></div><div class="top-actions" style="margin-bottom:8px"><div class="section-title" style="margin:0">Pendências</div>${pend.length?`<span class="badge" style="background:var(--slate-soft);color:var(--slate)">${pr.concluidas} de ${pr.total} concluída${pr.total>1?'s':''}</span>`:''}</div><div class="pend-list">${pendHtml}</div>
     <div class="divider"></div><div class="section-title">Problemas discutidos nesta sessão</div>${ligProb}
     <div class="section-title" style="margin-top:16px">Iniciativas priorizadas nesta sessão</div>${lig}
     ${timelineHtml(cache.comentarios,'sessao_id',s.id,'tlSessao')}
   </div>`;
 }
 function attachSessaoDetailHandlers(content,s){
-  if(!s) return;
+  if(!s||openForm==='sessao') return; // com o formulario aberto o detalhe nao esta na tela
   content.querySelector('#closeSessaoBtn').addEventListener('click',()=>{openDetail=null;render();});
   content.querySelector('#editSessaoBtn').addEventListener('click',()=>{openForm='sessao';render();});
+  content.querySelector('#pautaSessaoBtn').addEventListener('click',()=>abrirPauta(s));
+  content.querySelectorAll('.pend-toggle').forEach(cb=>cb.addEventListener('change', async ()=>{
+    if(busy){ cb.checked=!cb.checked; return; } busy=true;
+    const concluida=cb.checked;
+    const e=await updateRow('sessao_pendencias',cb.dataset.pid,{concluida,concluida_em:concluida?new Date().toISOString():null});
+    busy=false;
+    if(e){ toast('Erro ao atualizar pendência','err'); console.error(e); cb.checked=!concluida; return; }
+    await refreshAll(); render(); toast(concluida?'Pendência concluída':'Pendência reaberta','ok');
+  }));
   content.querySelectorAll('[data-openini]').forEach(r=>r.addEventListener('click',()=>{currentTab='iniciativas';openDetail={type:'caso',id:r.dataset.openini};render();}));
   content.querySelectorAll('[data-openprob]').forEach(r=>r.addEventListener('click',()=>{currentTab='problemas';openDetail={type:'problema',id:r.dataset.openprob};render();}));
   content.querySelector('#deleteSessaoBtn').addEventListener('click', async ()=>{
     const probsLig=cache.problemas.filter(p=>p.sessao_id===s.id);
     const inisLig=cache.iniciativas.filter(c=>c.sessao_id===s.id);
-    const aviso=(probsLig.length||inisLig.length)
-      ? `Excluir esta sessão?\n\n${probsLig.length} problema(s) voltarão para "Novo" e ${inisLig.length} iniciativa(s) serão desvinculadas.`
+    const nPend=pendDaSessao(s.id).length;
+    const aviso=(probsLig.length||inisLig.length||nPend)
+      ? `Excluir esta sessão?\n\n${probsLig.length} problema(s) voltarão para "Novo", ${inisLig.length} iniciativa(s) serão desvinculadas e ${nPend} pendência(s) serão apagadas.`
       : 'Excluir esta sessão?';
     if(!confirm(aviso))return;
     // desvincular e resetar antes de apagar (garante o comportamento independente da FK)
